@@ -406,8 +406,11 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       const k = e.key
+      // let focused buttons/links keep their native activation keys
+      if ((tag === 'BUTTON' || tag === 'A') && (k === ' ' || k === 'Enter')) return
       if (k === 'ArrowLeft') (e.preventDefault(), stepAlong(-1))
       else if (k === 'ArrowRight') (e.preventDefault(), stepAlong(1))
       else if (k === 'ArrowDown') (e.preventDefault(), switchLine(1))
@@ -420,14 +423,17 @@ export default function App() {
       else if (k === '/') (e.preventDefault(), setFinder(true))
       else if (k === ' ') {
         e.preventDefault()
-        if (ride?.legs.length) setPlaying((p) => !p)
+        if (ride?.legs.length) {
+          if (!playing && rideRef.current.leg >= ride.legs.length) rideTo(0)
+          setPlaying((p) => !p)
+        }
         if (guide === 3) guideDone()
-      } else if (k === '[' && ride) rideTo((rideUi?.stop ?? 1) - 1)
-      else if (k === ']' && ride) rideTo((rideUi?.stop ?? 0) + 1)
+      } else if (k === '[' && ride && rideUi) rideTo(rideUi.stop - 2)
+      else if (k === ']' && ride && rideUi) rideTo(rideUi.stop)
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [stepAlong, switchLine, ride, rideUi, rideTo])
+  }, [stepAlong, switchLine, ride, rideUi, rideTo, playing, guide])
 
   const stats = weave?.stats
   const demoLoaded = files.some((f) => f.path.startsWith('demo/'))

@@ -84,7 +84,7 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
         <header>
           <span className="wbox-lg">{w.count > 9 ? '9+' : w.count}</span>
           <div>
-            <h2>{w.label}</h2>
+            <h2><Red text={w.label} /></h2>
             <p className="sub">closed works — {w.count} step{w.count === 1 ? '' : 's'} folded off the line</p>
           </div>
           <button className="x" onClick={onClose} aria-label="close">✕</button>
@@ -92,7 +92,7 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
         <p className="note">Tiny offshoots — summarizer runs, dead handoffs, one-shot checks — are folded into this spur so the map stays readable. Their steps are still here:</p>
         <ol className="wsteps">
           {w.steps.slice(0, 12).map((st) => (
-            <li key={st.id}><b>{st.kind}</b> {st.title}</li>
+            <li key={st.id}><b>{st.kind}</b> <Red text={st.title ?? ''} /></li>
           ))}
           {w.steps.length > 12 && <li className="more">…and {w.steps.length - 12} more</li>}
         </ol>
@@ -111,7 +111,7 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
       <header>
         <span className="stopdot" style={{ borderColor: line.color }} />
         <div>
-          <h2>{s.name}</h2>
+          <h2><Red text={s.name} /></h2>
           <p className="sub">
             stop {s.ord + 1} of {line.stations.length} · {svc}{line.trunk ? '' : ' branch'} · {fmt(st.ts)}
           </p>
@@ -156,8 +156,8 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
           <p><Red text={st.thinking} /></p>
         </details>
       )}
-      {st.body && st.body !== st.title && (
-        <div className="body"><p><Red text={st.body.slice(0, 4000)} /></p></div>
+      {st.body && (
+        <div className="body"><p><Red text={st.body.slice(0, 4000)} />{st.body.length > 4000 && ' …'}</p></div>
       )}
       {st.calls?.map((c) => <CallRow key={c.id} c={c} />)}
 

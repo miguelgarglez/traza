@@ -42,6 +42,26 @@ console.log(`export: ${files.length} files, biggest session ${biggest.length} fi
 // so fps numbers are only honest with a real compositor
 const browser = await chromium.launch({ headless: false })
 
+// --- 0. environment ceiling: rAF on a blank page in this browser ------------
+const ctx0 = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const blank = await ctx0.newPage()
+await blank.goto('about:blank')
+const ceiling = await blank.evaluate(
+  () =>
+    new Promise((res) => {
+      let n = 0
+      const t = performance.now()
+      const loop = () => {
+        n++
+        if (performance.now() - t < 1200) requestAnimationFrame(loop)
+        else res((n * 1000) / (performance.now() - t))
+      }
+      requestAnimationFrame(loop)
+    }),
+)
+await ctx0.close()
+console.log(`  i environment rAF ceiling ≈ ${ceiling.toFixed(0)}fps`)
+
 // --- 1. big-network load + pan fps ----------------------------------------
 const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
 const errors = []
@@ -76,8 +96,8 @@ const fpsPromise = page.evaluate(
 for (let i = 0; i < 60; i++) await page.mouse.move(720 + Math.sin(i / 5) * 520, 450 + Math.cos(i / 5) * 260)
 const fps = await fpsPromise
 await page.mouse.up()
-console.log(`  i pan fps ≈ ${fps.toFixed(0)}`)
-ok(fps >= 55, `1200-step network pans near 60fps (${fps.toFixed(0)})`)
+console.log(`  i pan fps ≈ ${fps.toFixed(0)} (ceiling ${ceiling.toFixed(0)})`)
+ok(fps >= Math.min(55, ceiling * 0.9), `1200-step network pans at display rate (${fps.toFixed(0)} of ~${ceiling.toFixed(0)})`)
 
 // --- 2. ride on the full 11-session network --------------------------------
 await page.evaluate((fs) => window.__trazaLoad(fs, false), files)

@@ -71,18 +71,29 @@ export function parseCodexRollout(path: string, text_: string): Session {
 
   for (const l of lines) {
     const t = ts(l)
-    // Unwrap response_item envelopes (older dialect).
+    // Unwrap envelopes. response_item rows carry the item in payload (or
+    // payload.payload for the doubly-nested variant); event_msg wraps a
+    // {type: user_message|agent_message, message} payload.
     let p = (l.payload ?? {}) as Record<string, unknown>
     let type = (l.type ?? p.type) as string | undefined
-    if (type === 'response_item' && p.payload && typeof p.payload === 'object') {
-      p = p.payload as Record<string, unknown>
-      type = p.type as string
+    let guard = 0
+    while (type === 'response_item' && guard++ < 3) {
+      if (p.payload && typeof p.payload === 'object') p = p.payload as Record<string, unknown>
+      type = (p.type ?? type) as string
+      if (type === 'response_item' && !(p.payload && typeof p.payload === 'object')) break
     }
+    if (type === 'event_msg') type = p.type as string
     switch (type) {
       case 'session_meta': {
         sessionId = String(p.session_id ?? p.id ?? sessionId)
         cwd = typeof p.cwd === 'string' ? p.cwd : cwd
         model = typeof p.model === 'string' ? p.model : model
+        break
+      }
+      case 'user_message':
+      case 'agent_message': {
+        const role = type === 'user_message' ? 'user' : 'assistant'
+        pushMessage(role, text(p.message ?? p.content), t)
         break
       }
       case 'message': {

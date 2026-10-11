@@ -216,7 +216,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       svg.dataset.pan = '1'
       clearTimeout(panIdle)
       panIdle = setTimeout(() => delete svg.dataset.pan, 160)
-      const r = svg.getBoundingClientRect()
+      // measure the untransformed wrap — the svg element itself is CSS-
+      // translated by the camera, so its rect already contains the offset
+      const r = (svg.parentElement ?? svg).getBoundingClientRect()
       const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.006 : 0.0022))
       zoomAt(e.clientX - r.left, e.clientY - r.top, f)
     }
@@ -240,7 +242,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     if (pinch.current && pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()] as [{ x: number; y: number }, { x: number; y: number }]
       const nd = Math.hypot(a.x - b.x, a.y - b.y)
-      const r = svgRef.current!.getBoundingClientRect()
+      const r = (svgRef.current!.parentElement ?? svgRef.current!).getBoundingClientRect()
       const mx = (a.x + b.x) / 2 - r.left
       const my = (a.y + b.y) / 2 - r.top
       const f = nd / pinch.current.d

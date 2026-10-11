@@ -1,4 +1,5 @@
 import type { Session, Step, Thread, Weave } from './model.ts'
+import { redactText } from './redact.ts'
 
 // metro.ts — turn a Session's threads into an octilinear (45°/90°) schematic:
 // the spine is a straight trunk line, branches arc off at 45° onto parallel
@@ -108,7 +109,7 @@ function tierOf(step: Step): Tier {
 
 function nameOf(step: Step): string {
   const t = step.title?.trim().replace(/^<[^>]+>\s*/, '')
-  if (t) return short(t)
+  if (t) return short(redactText(t).text)
   if (step.calls?.length) return short(step.calls.map((c) => c.name).join(', '))
   return step.kind
 }
@@ -135,7 +136,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
     trunk: true,
     stations: spine.steps.map((st, i) => {
       const s: Station = {
-        id: `${spine.id}/${st.id}`,
+        id: `${session.id}/${spine.id}/${st.id}`,
         stepIds: [st.id],
         step: st,
         name: nameOf(st),
@@ -288,6 +289,11 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
         forkSt = a.s
         forkInferred = true
       }
+      if (!forkSt) {
+        // parent line has no stations to hang a fork from (empty spine)
+        worksFrom(t)
+        continue
+      }
       // merge: explicit anchor, else node-order inference (a subagent's
       // result lands on the first parent step after the branch's last node),
       // else time inference. Nothing means the branch really terminates.
@@ -364,7 +370,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
       for (let j = 0; j < n; j++) {
         const st = t.steps[j]!
         const s: Station = {
-          id: `${t.id}/${st.id}`,
+          id: `${session.id}/${t.id}/${st.id}`,
           stepIds: [st.id],
           step: st,
           name: nameOf(st),
@@ -446,7 +452,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
     const emit = (group: WorkItem[], k: number) => {
       const mid = group[Math.floor(group.length / 2)]!
       works.push({
-        id: `${lineId}#w${works.length}`,
+        id: `${session.id}/${lineId}#w${works.length}`,
         at: { lineId, stationId: mid.station.id },
         x: mid.station.x + (k % 2 ? -1 : 1) * WORKS_LEN * 0.28,
         y: mid.station.y + WORKS_LEN * (1 + (k % 3) * 0.35),

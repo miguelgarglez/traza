@@ -13,6 +13,7 @@ const PATTERNS: { name: string; re: RegExp }[] = [
   { name: 'github fine pat', re: /\bgithub_pat_[A-Za-z0-9_]{30,}\b/g },
   { name: 'slack token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g },
   { name: 'generic bearer', re: /\b((?:bearer|token|api[_-]?key|secret|password)\s*[=:]\s*["']?)[A-Za-z0-9_\-\.]{24,}["']?/gi },
+  { name: 'bearer header', re: /\b(bearer\s+)[A-Za-z0-9_\-\.=]{20,}/gi },
 ]
 
 export function redactText(text: string): { text: string; hits: { name: string }[] } {
@@ -23,7 +24,7 @@ export function redactText(text: string): { text: string; hits: { name: string }
     out = out.replace(re, (_m, g1) => {
       hits.push({ name })
       // For key=value matches keep the "key=" prefix so context survives.
-      const keep = name === 'generic bearer' && g1 ? g1 : ''
+      const keep = (name === 'generic bearer' || name === 'bearer header') && g1 ? g1 : ''
       return `${keep}⟪${name}⟫`
     })
   }

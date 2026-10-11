@@ -62,6 +62,31 @@ ok(byAgent.cursor.timed === false, 'cursor marked untimed')
 ok(byAgent.cursor.threads[0].steps.some((s) => s.calls?.length), 'cursor tool calls parsed')
 ok(byAgent.atif.threads.filter((t) => t.kind === 'branch').length === 1, 'atif subagent trajectory woven')
 
+// — review regressions —
+const { parseCodexRollout } = await import('../src/lib/parse/codex.ts')
+const singleNest = parseCodexRollout('r.jsonl', [
+  JSON.stringify({ timestamp: '2026-01-01T00:00:00Z', type: 'response_item', payload: { type: 'message', role: 'user', content: 'hello there' } }),
+  JSON.stringify({ timestamp: '2026-01-01T00:00:01Z', type: 'response_item', payload: { type: 'message', role: 'assistant', content: 'on it' } }),
+].join('\n'))
+ok(singleNest.threads[0].steps.length === 2, `codex single-nest response_item parses (${singleNest.threads[0].steps.length} steps)`)
+const evMsg = parseCodexRollout('r.jsonl', JSON.stringify({ timestamp: '2026-01-01T00:00:00Z', type: 'event_msg', payload: { type: 'agent_message', message: 'done' } }))
+ok(evMsg.threads[0].steps.length === 1, 'codex event_msg envelope parses')
+const bearerLeak = 'Authorization: Bearer ' + 'aB3' + 'x'.repeat(30)
+ok(!redactText(bearerLeak).text.includes('axxx'), 'Authorization: Bearer redacted')
+const { buildNetwork } = await import('../src/lib/metro.ts')
+const ids = new Set()
+const dups = new Set()
+for (const c of buildNetwork(weave).corridors) for (const l of c.lines) for (const s of l.stations) {
+  if (ids.has(s.id)) dups.add(s.id)
+  ids.add(s.id)
+}
+ok(dups.size === 0, `station ids unique across sessions (${dups.size} dupes)`)
+const emptySpine = { id: 'x', agent: 'devin', title: 'x', start: null, end: null, timed: false, threads: [
+  { id: 't-0', label: 'main', kind: 'spine', hiddenSteps: 0, steps: [] },
+  { id: 't-1', label: 'sub', kind: 'branch', forkStep: undefined, hiddenSteps: 0, steps: [{ id: 'a', ts: null, actor: 'agent', kind: 'message', title: 'x' }] },
+], files: [] }
+try { buildNetwork({ sessions: [emptySpine], files: [], stats: {} }); ok(true, 'empty spine + branch does not crash') } catch { ok(false, 'empty spine + branch does not crash') }
+
 // — real export, if provided —
 const realDir = process.argv[2] ?? process.env.LAB_EXPORT
 if (realDir && existsSync(realDir)) {

@@ -10,8 +10,12 @@ async function walkEntry(entry: FileSystemEntry, base: string, out: { path: stri
     out.push({ path: base + file.name, file })
   } else if (entry.isDirectory) {
     const reader = (entry as FileSystemDirectoryEntry).createReader()
-    const children = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej))
-    for (const c of children) await walkEntry(c, base + entry.name + '/', out)
+    // readEntries returns ≤100 entries per call — drain until an empty batch
+    for (;;) {
+      const children = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej))
+      if (!children.length) break
+      for (const c of children) await walkEntry(c, base + entry.name + '/', out)
+    }
   }
 }
 
