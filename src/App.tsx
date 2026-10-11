@@ -282,6 +282,13 @@ export default function App() {
     setStatus(w.sessions.length ? 'ready' : 'lineclosed')
   }, [])
 
+  // test hook: live-check/perf scripts inject files without simulating drops
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has('test')) {
+      ;(window as unknown as { __trazaLoad?: typeof load }).__trazaLoad = load
+    }
+  }, [load])
+
   // first visit: open on the demo service so the first thing seen is a plano
   useEffect(() => {
     loadDemo()

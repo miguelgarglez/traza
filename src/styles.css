@@ -36,6 +36,13 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   cursor: grab; touch-action: none;
 }
 .plano:active { cursor: grabbing; }
+.plano .world { will-change: transform; }
+
+/* while the camera is moving (pan/zoom/ride-follow), drop minor detail so motion stays fluid */
+.plano[data-pan] .lb, .plano[data-pan] .ftag, .plano[data-pan] .wnum,
+.plano[data-pan] .st-l, .plano[data-pan] .st-m, .plano[data-pan] .wbox,
+.plano.riding .lb1, .plano.riding .lb2, .plano.riding .ftag,
+.plano.riding .st-l, .plano.riding .wnum { visibility: hidden; }
 
 .zone { fill: #ffffff; opacity: 0.34; transition: fill 1.1s var(--ease), opacity 0.25s; }
 .plano.riding .zone { fill: #1b2635; }

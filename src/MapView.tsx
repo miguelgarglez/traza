@@ -62,9 +62,15 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   const cam = useRef({ x: 0, y: 0, k: 0.1 })
   const raf = useRef(0)
   const flight = useRef<number | null>(null)
-  const [hover, setHover] = useState<{ s: Station; px: number; py: number } | null>(null)
+  const [hover, setHoverRaw] = useState<{ s: Station; px: number; py: number } | null>(null)
+  const hoverRef = useRef<{ s: Station; px: number; py: number } | null>(null)
+  const tipRef = useRef<HTMLDivElement>(null)
+  const setHover = (h: typeof hover) => {
+    hoverRef.current = h
+    setHoverRaw(h)
+  }
   const [fresh, setFresh] = useState(true)
-  const drag = useRef<{ px: number; py: number; cx: number; cy: number; moved: boolean } | null>(null)
+  const drag = useRef<{ px: number; py: number; cx: number; cy: number; moved: boolean; panning?: boolean } | null>(null)
   const pinch = useRef<{ d: number; k: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const reduced = useMemo(() => matchMedia('(prefers-reduced-motion: reduce)').matches, [])
@@ -74,9 +80,19 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     const svg = svgRef.current
     if (!g || !svg) return
     const { x, y, k } = cam.current
-    g.setAttribute('transform', `translate(${x} ${y}) scale(${k})`)
+    // translation on the svg element → pure compositing during pans;
+    // scale stays on the world group so vectors re-raster crisp only on zoom
+    svg.style.transform = `translate(${x}px, ${y}px)`
+    g.setAttribute('transform', `scale(${k})`)
     svg.dataset.z = k < 0.18 ? 'far' : k < 0.7 ? 'mid' : 'near'
-    setHover((h) => (h ? { ...h, ...toScreen(h.s.x, h.s.y) } : h))
+    // reposition the tip imperatively — a setState here would re-render
+    // the whole network every camera frame
+    const h = hoverRef.current
+    if (h && tipRef.current) {
+      const { px, py } = toScreen(h.s.x, h.s.y)
+      tipRef.current.style.left = `${px + 14}px`
+      tipRef.current.style.top = `${py - 34}px`
+    }
   }
 
   const toScreen = (wx: number, wy: number) => {
@@ -194,8 +210,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
+    let panIdle: ReturnType<typeof setTimeout> | undefined
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
+      svg.dataset.pan = '1'
+      clearTimeout(panIdle)
+      panIdle = setTimeout(() => delete svg.dataset.pan, 160)
       const r = svg.getBoundingClientRect()
       const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.006 : 0.0022))
       zoomAt(e.clientX - r.left, e.clientY - r.top, f)
@@ -239,6 +259,10 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
         onUserPan?.()
       }
       if (dg.moved) {
+        if (!dg.panning) {
+          dg.panning = true
+          svgRef.current!.dataset.pan = '1'
+        }
         cam.current.x = dg.cx + dx
         cam.current.y = dg.cy + dy
         cancelAnimationFrame(raf.current)
@@ -251,6 +275,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     if (pointers.current.size < 2) pinch.current = null
     const dg = drag.current
     drag.current = null
+    if (!pointers.current.size && svgRef.current) delete svgRef.current.dataset.pan
     if (dg && !dg.moved) {
       const t = e.target as Element
       const sid = t.getAttribute?.('data-sid')
@@ -264,6 +289,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }
 
   const onOver = (e: React.PointerEvent) => {
+    if (pointers.current.size) return // mid-drag/pinch: skip hover churn
     const t = e.target as Element
     const sid = t.getAttribute?.('data-sid')
     if (!sid) {
@@ -305,7 +331,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
         onPointerOver={onOver}
         onPointerLeave={() => setHover(null)}
       >
-        <g ref={worldRef}>
+        <g ref={worldRef} className="world">
           {/* zone bands behind each corridor */}
           {net.corridors.map((c, i) => (
             <rect
@@ -459,7 +485,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
         </g>
       </svg>
       {hover && !drag.current?.moved && (
-        <div className="tip" style={{ left: hover.px + 14, top: hover.py - 34 }}>
+        <div ref={tipRef} className="tip" style={{ left: hover.px + 14, top: hover.py - 34 }}>
           <b>{hover.s.name}</b>
           <span>
             {hover.s.step.actor} · stop {hover.s.ord + 1}
