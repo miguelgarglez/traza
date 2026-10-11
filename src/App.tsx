@@ -15,7 +15,7 @@ export default function App() {
   const [status, setStatus] = useState<Status>('boot')
   const [busy, setBusy] = useState<string | null>('surveying the export…')
   const [sel, setSel] = useState<string | null>(null)
-  const [keyOpen, setKeyOpen] = useState(true)
+  const [keyOpen, setKeyOpen] = useState(() => typeof innerWidth === 'undefined' || innerWidth > 720)
   const [srcOpen, setSrcOpen] = useState(false)
   const [hint, setHint] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -38,9 +38,124 @@ export default function App() {
     [net, svcIdx],
   )
 
+  // fare meter — cumulative tokens spent, stop by stop
+  const fares = useMemo(() => {
+    if (!ride) return [] as number[]
+    let acc = 0
+    return ride.stops.map((s) => {
+      const t = s.step?.tokens
+      acc += (t?.input ?? 0) + (t?.output ?? 0)
+      return acc
+    })
+  }, [ride])
+
+  const [solo, setSolo] = useState<number | null>(null)
+  const [finder, setFinder] = useState(false)
+  const switchFired = useRef(new Set<string>())
+  const [guide, setGuide] = useState(0) // 0 off, 1 drag, 2 interchange, 3 ride
+
+  // first run: platform-sign guide, three learn-by-doing steps
+  useEffect(() => {
+    if (!net || localStorage.getItem('traza.guide')) return
+    const t = setTimeout(() => setGuide(1), 1800)
+    return () => clearTimeout(t)
+  }, [net])
+
+  useEffect(() => {
+    if (guide !== 2 || !net) return
+    // fly to the first interchange of the first corridor
+    const ix = net.corridors[0]?.lines.flatMap((l) => l.stations).find((s) => s.tier === 'interchange')
+    if (ix) {
+      map.current?.flyTo(ix.x, ix.y - 60, 640, 400)
+      setSel(ix.id)
+    }
+  }, [guide, net])
+
+  const guideDone = () => {
+    setGuide(0)
+    localStorage.setItem('traza.guide', '1')
+  }
+
+  // ghost service — after 20 idle seconds a dim train drifts the trunk
+  const lastAct = useRef(performance.now())
+  useEffect(() => {
+    const bump = () => {
+      lastAct.current = performance.now()
+    }
+    for (const ev of ['pointerdown', 'wheel', 'keydown']) addEventListener(ev, bump, { passive: true })
+    return () => {
+      for (const ev of ['pointerdown', 'wheel', 'keydown']) removeEventListener(ev, bump)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!net || reduced) return
+    const trunk = net.corridors[0]?.lines.find((l) => l.trunk)
+    const pts = trunk?.segs[0]?.pts
+    if (!pts || pts.length < 2 || !trunk) return
+    const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i]!.x, p.y - pts[i]!.y))
+    const total = lens.reduce((a, b) => a + b, 0)
+    if (!total) return
+
+    let running = false
+    let raf = 0
+    let d = 0
+    let dir = 1
+    let last = 0
+    const at = (dist: number) => {
+      let left = dist
+      for (let i = 0; i < lens.length; i++) {
+        const l = lens[i]!
+        if (left <= l || i === lens.length - 1) {
+          const a = pts[i]!
+          const b = pts[i + 1]!
+          const t = l ? Math.min(1, left / l) : 1
+          return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI }
+        }
+        left -= l
+      }
+      return { ...pts[0]!, angle: 0 }
+    }
+    const paint = (now: number) => {
+      if (!running) return
+      if (!last) last = now
+      d += (dir * 68 * (now - last)) / 1000
+      last = now
+      if (d >= total) (d = total), (dir = -1)
+      else if (d <= 0) (d = 0), (dir = 1)
+      const p = at(d)
+      map.current?.setGhost(p.x, p.y, dir > 0 ? p.angle : p.angle + 180, true, trunk.color)
+      raf = requestAnimationFrame(paint)
+    }
+    const stop = () => {
+      if (!running) return
+      running = false
+      cancelAnimationFrame(raf)
+      map.current?.setGhost(0, 0, 0, false)
+    }
+    const poke = () => {
+      lastAct.current = performance.now()
+      stop()
+    }
+    const iv = setInterval(() => {
+      if (!running && !playing && performance.now() - lastAct.current > 20000) {
+        running = true
+        last = 0
+        raf = requestAnimationFrame(paint)
+      }
+    }, 1000)
+    for (const ev of ['pointerdown', 'wheel', 'keydown']) addEventListener(ev, poke, { passive: true })
+    return () => {
+      clearInterval(iv)
+      stop()
+      for (const ev of ['pointerdown', 'wheel', 'keydown']) removeEventListener(ev, poke)
+    }
+  }, [net, reduced, playing])
+
   // reset ride when the network or service changes
   useEffect(() => {
     rideRef.current = { leg: 0, dist: 0, dwell: 0 }
+    switchFired.current.clear()
     setPlaying(false)
     setRideUi(
       ride && ride.stops.length > 1
@@ -75,13 +190,28 @@ export default function App() {
       } else {
         rp.dist += (PXS * speed * dt) / 1000
       }
+      // points throw: flash the junction as the train crosses it
+      leg.switches.forEach((sw, si) => {
+        const key = `${rp.leg}:${si}`
+        if (switchFired.current.has(key)) return
+        const p = legPoint(leg, Math.min(rp.dist, leg.len))
+        if (Math.hypot(p.x - sw.x, p.y - sw.y) < 16) {
+          switchFired.current.add(key)
+          map.current?.switchThrow(sw.x, sw.y)
+          try {
+            navigator.vibrate?.(4)
+          } catch {
+            /* not supported */
+          }
+        }
+      })
       if (rp.dist >= leg.len) {
         // arrived at leg.stop
         rp.leg += 1
         rp.dist = 0
         rp.dwell = 150
         const arrived = leg.stop
-        setSel(arrived.kind === 'station' ? arrived.id : null)
+        setSel(arrived.id)
         setRideUi({
           stop: rp.leg + 1,
           total: ride.stops.length,
@@ -97,6 +227,12 @@ export default function App() {
         }
         if (rp.leg >= ride.legs.length) {
           setPlaying(false)
+          setRideUi({
+            stop: ride.stops.length,
+            total: ride.stops.length,
+            name: 'terminus — all change',
+            next: `${arrived.name} · ${fmtK(fares[fares.length - 1] ?? 0)} tok`,
+          })
           return
         }
       } else {
@@ -116,8 +252,9 @@ export default function App() {
       if (!ride || !ride.stops.length) return
       const k = Math.max(0, Math.min(ride.stops.length - 1, stopIdx))
       rideRef.current = { leg: Math.min(k, ride.legs.length - 1), dist: 0, dwell: 0 }
+      switchFired.current.clear()
       const stop = ride.stops[k]!
-      setSel(stop.kind === 'station' ? stop.id : null)
+      setSel(stop.id)
       setRideUi({ stop: k + 1, total: ride.stops.length, name: stop.name, next: ride.stops[k + 1]?.name ?? 'terminus' })
       map.current?.setTrain(stop.x, stop.y, 0, true, lineColorOf(net, stop.lineId))
       map.current?.flyTo(stop.x, stop.y, 700, 420)
@@ -273,9 +410,11 @@ export default function App() {
       else if (k === '+' || k === '=') map.current?.zoomBy(1.5)
       else if (k === '-') map.current?.zoomBy(1 / 1.5)
       else if (k === 'o') filePick.current?.click()
+      else if (k === '/') (e.preventDefault(), setFinder(true))
       else if (k === ' ') {
         e.preventDefault()
         if (ride?.legs.length) setPlaying((p) => !p)
+        if (guide === 3) guideDone()
       } else if (k === '[' && ride) rideTo((rideUi?.stop ?? 1) - 1)
       else if (k === ']' && ride) rideTo((rideUi?.stop ?? 0) + 1)
     }
@@ -288,7 +427,7 @@ export default function App() {
 
   return (
     <main
-      className={net ? 'stage hasnet' : 'stage'}
+      className={`stage${net ? ' hasnet' : ''}${playing ? ' night' : ''}`}
       onPointerDown={hint ? seen : undefined}
       onWheel={hint ? seen : undefined}
     >
@@ -297,8 +436,15 @@ export default function App() {
           ref={map}
           net={net}
           sel={sel}
-          onPick={(id) => (setSel(id), id && seen())}
+          onPick={(id) => {
+            setSel(id)
+            if (id) seen()
+            if (guide === 2) setGuide(3)
+          }}
           onPickWorks={(w: Works) => setSel(w.id)}
+          riding={playing}
+          solo={solo ?? (playing && ride ? ride.corridorIdx : null)}
+          onUserPan={() => guide === 1 && setGuide(2)}
         />
       )}
 
@@ -326,6 +472,8 @@ export default function App() {
                   <button
                     key={c.session.id}
                     className="svc"
+                    onPointerEnter={() => setSolo(i)}
+                    onPointerLeave={() => setSolo(null)}
                     onClick={() => {
                       if (!trunk) return
                       const xs = c.lines.flatMap((l) => l.segs.flatMap((s) => s.pts.map((p) => p.x)))
@@ -363,6 +511,7 @@ export default function App() {
               <div className="keyfoot">
                 <button onClick={() => dirPick.current?.click()}>open folder</button>
                 <button onClick={() => filePick.current?.click()}>open files</button>
+                <button aria-label="replay the tour" title="replay the tour" onClick={() => setGuide(1)}>?</button>
                 {demoLoaded ? (
                   <span className="demopill">demo export</span>
                 ) : (
@@ -386,10 +535,11 @@ export default function App() {
           </div>
           <button className="skip" aria-label="previous stop" onClick={() => rideTo(rideUi.stop - 2)} disabled={rideUi.stop <= 1}>|◀</button>
           <button
-            className={playing ? 'play on' : 'play'}
+            className={`play${playing ? ' on' : ''}${guide === 3 ? ' nudge' : ''}`}
             onClick={() => {
               if (!playing && rideRef.current.leg >= ride.legs.length) rideTo(0)
               setPlaying(!playing)
+              if (guide === 3) guideDone()
             }}
             aria-label={playing ? 'pause the ride' : 'ride the line'}
           >
@@ -397,13 +547,30 @@ export default function App() {
           </button>
           <button className="skip" aria-label="next stop" onClick={() => rideTo(rideUi.stop)} disabled={rideUi.stop >= rideUi.total}>▶|</button>
           <div className="rideinfo">
-            <b>{rideUi.name}</b>
-            <div className="rideprog" aria-hidden>
+            <div className="led">
+              <span>{rideUi.stop >= rideUi.total ? 'terminus' : 'next'}</span>
+              <b>{rideUi.next}</b>
+            </div>
+            <div
+              className="rideprog"
+              role="slider"
+              aria-label="ride progress"
+              aria-valuenow={rideUi.stop}
+              aria-valuemax={rideUi.total}
+              onPointerDown={(e) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                rideTo(Math.round(((e.clientX - r.left) / r.width) * rideUi.total) - 1)
+              }}
+            >
               <i style={{ width: `${(rideUi.stop / rideUi.total) * 100}%` }} />
             </div>
-            <span>
-              stop {rideUi.stop} of {rideUi.total} · next {rideUi.next}
+            <span className="ridesub">
+              {rideUi.name} · {rideUi.stop}/{rideUi.total}
             </span>
+          </div>
+          <div className="fare" title="tokens spent so far on this service">
+            <b key={rideUi.stop}>{fmtK(fares[rideUi.stop - 1] ?? 0)}</b>
+            <span>tok</span>
           </div>
           <div className="speeds">
             {[1, 2, 4].map((s) => (
@@ -417,7 +584,35 @@ export default function App() {
 
       {net && <Inspector net={net} sel={sel} onClose={() => setSel(null)} onJump={jump} onPrevNext={stepAlong} />}
 
-      {hint && net && (
+      {finder && net && (
+        <Finder
+          net={net}
+          onGo={(s) => {
+            setSel(s.id)
+            map.current?.flyTo(s.x, s.y, 700, 420)
+          }}
+          onClose={() => setFinder(false)}
+        />
+      )}
+
+      {/* first-run guide — hanging platform signs, learn by doing */}
+      {guide > 0 && (
+        <div className={`gsign g${guide}`} role="note">
+          <div className="sign">
+            <b>{guide === 1 ? 'every station is a step the agent took' : guide === 2 ? 'a branch peeled off — a subagent ran alongside' : 'ride the line'}</b>
+            <p>
+              {guide === 1
+                ? 'drag the plano to look around'
+                : guide === 2
+                  ? 'click the pinned interchange to meet the sidekick'
+                  : 'press play — the train re-runs the session through the night'}
+            </p>
+            <button onClick={guideDone}>skip the tour</button>
+          </div>
+        </div>
+      )}
+
+      {hint && net && !guide && (
         <div className="hint" role="note">
           <b>first ride</b> drag to pan · scroll to zoom · click a station · ←→ ride the line
         </div>
@@ -486,6 +681,81 @@ export default function App() {
         onChange={(e) => filesFromInput(e.target.files).then(load)}
       />
     </main>
+  )
+}
+
+function fmtK(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
+/** "Where to?" — citymapper-style station finder over names, actors and tools. */
+function Finder({ net, onGo, onClose }: { net: Network; onGo: (s: Station) => void; onClose: () => void }) {
+  const [q, setQ] = useState('')
+  const [idx, setIdx] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => inputRef.current?.focus(), [])
+
+  const all = useMemo(() => {
+    const out: { s: Station; svc: string; color: string }[] = []
+    net.corridors.forEach((c, ci) =>
+      c.lines.forEach((l) =>
+        l.stations.forEach((s) =>
+          out.push({ s, svc: `S${ci + 1}`, color: l.color }),
+        ),
+      ),
+    )
+    return out
+  }, [net])
+
+  const hits = useMemo(() => {
+    const t = q.trim().toLowerCase()
+    if (!t) return all.slice(0, 8)
+    return all
+      .filter(
+        ({ s }) =>
+          s.name.toLowerCase().includes(t) ||
+          s.step.actor.includes(t) ||
+          (s.step.calls ?? []).some((c) => c.name.toLowerCase().includes(t)),
+      )
+      .slice(0, 8)
+  }, [all, q])
+
+  return (
+    <div className="finderwrap" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="finder" role="dialog" aria-label="where to">
+        <div className="findhead">
+          <span>where to?</span>
+          <input
+            ref={inputRef}
+            value={q}
+            placeholder="station, tool, actor…"
+            onChange={(e) => (setQ(e.target.value), setIdx(0))}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') onClose()
+              else if (e.key === 'ArrowDown') (e.preventDefault(), setIdx((i) => Math.min(hits.length - 1, i + 1)))
+              else if (e.key === 'ArrowUp') (e.preventDefault(), setIdx((i) => Math.max(0, i - 1)))
+              else if (e.key === 'Enter' && hits[idx]) (onGo(hits[idx].s), onClose())
+            }}
+          />
+          <kbd>esc</kbd>
+        </div>
+        <ul>
+          {hits.map((h, i) => (
+            <li key={h.s.id} className={i === idx ? 'hit' : ''} onPointerEnter={() => setIdx(i)} onClick={() => (onGo(h.s), onClose())}>
+              <i style={{ background: h.color }} />
+              <b>{h.s.name}</b>
+              <span>
+                {h.svc} · {h.s.step.actor}
+                {h.s.step.calls?.[0] ? ` · ${h.s.step.calls[0].name}` : ''}
+              </span>
+            </li>
+          ))}
+          {!hits.length && <li className="nohit">no station answers to that</li>}
+        </ul>
+      </div>
+    </div>
   )
 }
 

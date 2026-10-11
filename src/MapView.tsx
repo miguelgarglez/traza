@@ -10,6 +10,10 @@ export interface MapHandle {
   setTrain: (x: number, y: number, angle: number, visible: boolean, color?: string) => void
   /** keep a world point inside the comfortable view area (ride follow) */
   keepInView: (x: number, y: number) => void
+  /** flash the points-throw glyph at a junction the train is crossing */
+  switchThrow: (x: number, y: number) => void
+  /** the idle ghost service — a dim train drifting the trunk */
+  setGhost: (x: number, y: number, angle: number, visible: boolean, color?: string) => void
 }
 
 interface Props {
@@ -17,6 +21,12 @@ interface Props {
   sel: string | null
   onPick: (id: string | null) => void
   onPickWorks: (w: Works) => void
+  /** night service: the ride is running — dim the field, glow the tracks */
+  riding: boolean
+  /** solo a corridor index; null = everything lit */
+  solo: number | null
+  /** fired once per gesture when the user drags the plano (first-run guide) */
+  onUserPan?: () => void
 }
 
 const K_MIN = 0.02
@@ -43,14 +53,17 @@ function stationGlyph(s: Station, color: string, sel: boolean) {
   return <circle key={s.id} cx={s.x} cy={s.y} r={2.3} fill={color} />
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, onUserPan }, ref) {
   const svgRef = useRef<SVGSVGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
   const trainRef = useRef<SVGGElement>(null)
+  const switchRef = useRef<SVGGElement>(null)
+  const ghostRef = useRef<SVGGElement>(null)
   const cam = useRef({ x: 0, y: 0, k: 0.1 })
   const raf = useRef(0)
   const flight = useRef<number | null>(null)
   const [hover, setHover] = useState<{ s: Station; px: number; py: number } | null>(null)
+  const [fresh, setFresh] = useState(true)
   const drag = useRef<{ px: number; py: number; cx: number; cy: number; moved: boolean } | null>(null)
   const pinch = useRef<{ d: number; k: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -144,6 +157,21 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
         apply()
       }
     },
+    switchThrow: (wx, wy) => {
+      const g = switchRef.current
+      if (!g) return
+      g.setAttribute('transform', `translate(${wx} ${wy})`)
+      g.classList.remove('live')
+      void g.getBoundingClientRect() // restart the animation
+      g.classList.add('live')
+    },
+    setGhost: (wx, wy, angle, visible, color) => {
+      const g = ghostRef.current
+      if (!g) return
+      g.setAttribute('transform', `translate(${wx} ${wy}) rotate(${angle})`)
+      g.style.display = visible ? '' : 'none'
+      if (color) g.style.setProperty('--train', color)
+    },
   }))
 
   const zoomAt = (px: number, py: number, f: number) => {
@@ -154,9 +182,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     apply()
   }
 
-  // initial fit once the net changes
+  // initial fit once the net changes; the plano "lays track" for a moment
   useEffect(() => {
     fitTo(net.bounds.x0, net.bounds.y0, net.bounds.x1, net.bounds.y1, false)
+    setFresh(!reduced)
+    const t = setTimeout(() => setFresh(false), 2600)
+    return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [net])
 
@@ -203,7 +234,10 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     if (dg) {
       const dx = e.clientX - dg.px
       const dy = e.clientY - dg.py
-      if (!dg.moved && Math.hypot(dx, dy) > 4) dg.moved = true
+      if (!dg.moved && Math.hypot(dx, dy) > 4) {
+        dg.moved = true
+        onUserPan?.()
+      }
       if (dg.moved) {
         cam.current.x = dg.cx + dx
         cam.current.y = dg.cy + dy
@@ -254,12 +288,14 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }, [net])
 
   const selStation = sel ? stationIndex.get(sel) : undefined
+  const dim = (ci: number): number | undefined => (solo === null || solo === ci ? undefined : 0.13)
+  const fade = { transition: 'opacity .25s' } as const
 
   return (
     <div className="mapwrap">
       <svg
         ref={svgRef}
-        className="plano"
+        className={`plano${riding ? ' riding' : ''}${fresh ? ' fresh' : ''}`}
         role="application"
         aria-label="metro map of agent sessions — drag to pan, scroll to zoom, click a station"
         onPointerDown={onPointerDown}
@@ -275,6 +311,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             <rect
               key={`z${i}`}
               className="zone"
+              data-ci={i}
+              style={{ ...fade, opacity: dim(i) }}
               x={net.bounds.x0 + 10}
               y={c.y0 - U * 0.45}
               width={net.bounds.x1 - net.bounds.x0 - 20}
@@ -283,14 +321,16 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             />
           ))}
           {/* tracks */}
-          {net.corridors.map((c) =>
-            c.lines.map((l) => (
-              <g key={l.id}>
+          {net.corridors.map((c, ci) =>
+            c.lines.map((l, li) => (
+              <g key={l.id} data-ci={ci} style={{ ...fade, opacity: dim(ci) }}>
                 {l.segs.map((sg, j) =>
                   sg.kind === 'track' ? (
                     <path
                       key={j}
                       className={sg.inferred ? 'track inferred' : 'track'}
+                      style={{ ['--d' as string]: `${ci * 160 + li * 90}ms` }}
+                      pathLength={1}
                       d={d(sg.pts)}
                       stroke={l.color}
                     />
@@ -309,12 +349,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             )),
           )}
           {/* works spurs */}
-          {net.corridors.map((c) =>
+          {net.corridors.map((c, ci) =>
             c.works.map((w) => {
               const a = stationIndex.get(w.at.stationId)
               if (!a) return null
               return (
-                <g key={w.id} className={sel === w.id ? 'works sel' : 'works'}>
+                <g key={w.id} className={sel === w.id ? 'works sel' : 'works'} data-ci={ci} style={{ ...fade, opacity: dim(ci) }}>
                   <path
                     className="stub"
                     d={`M${a.x} ${a.y} L${w.x + (a.x > w.x ? 8 : -8)} ${w.y}`}
@@ -337,9 +377,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             }),
           )}
           {/* stations */}
-          {net.corridors.map((c) =>
-            c.lines.map((l) => (
-              <g key={`st-${l.id}`}>
+          {net.corridors.map((c, ci) =>
+            c.lines.map((l, li) => (
+              <g key={`st-${l.id}`} data-ci={ci} style={{ ...fade, opacity: dim(ci), ['--d' as string]: `${ci * 160 + li * 90 + 500}ms` }}>
                 {l.stations.map((s) => (
                   <g key={s.id} className={`st st-${s.tier[0]}`} data-sid={s.id}>
                     {stationGlyph(s, l.color, sel === s.id)}
@@ -350,24 +390,44 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               </g>
             )),
           )}
-          {/* selection halo */}
+          {/* selection halo + you-are-here pin */}
           {selStation && (
             <g className="halo">
               <circle className="halo-ring" cx={selStation.x} cy={selStation.y} r={13} />
               <circle className="halo-dot" cx={selStation.x} cy={selStation.y} r={13} />
+              <g transform={`translate(${selStation.x} ${selStation.y - 13})`}>
+                <g className="pin">
+                  <path d="M0 0 C-5 -7 -7 -10 -7 -13 A7 7 0 1 1 7 -13 C7 -10 5 -7 0 0Z" fill="#E2001A" />
+                  <circle cy={-13} r={2.6} fill="#fff" />
+                </g>
+              </g>
             </g>
           )}
+          {/* points-throw flash at junctions the train crosses */}
+          <g ref={switchRef} className="ptswitch">
+            <path className="swtri" d="M0 -5 L9 0 L0 5 Z" />
+          </g>
           {/* the ride token — a little metro car riding the track */}
           <g ref={trainRef} className="train" style={{ display: 'none' }}>
+            <ellipse className="beam" cx={34} cy={0} rx={26} ry={9} />
+            <rect className="car" x={-15} y={-7} width={30} height={14} rx={7} />
+            <rect className="win" x={-8} y={-3.4} width={7} height={6.8} rx={2} />
+            <rect className="win" x={1} y={-3.4} width={7} height={6.8} rx={2} />
+            <circle className="head" cx={15} cy={0} r={2.6} />
+          </g>
+          {/* ghost service — drifts the trunk when nobody is looking */}
+          <g ref={ghostRef} className="train ghost" style={{ display: 'none' }}>
             <rect className="car" x={-15} y={-7} width={30} height={14} rx={7} />
             <rect className="win" x={-8} y={-3.4} width={7} height={6.8} rx={2} />
             <rect className="win" x={1} y={-3.4} width={7} height={6.8} rx={2} />
           </g>
           {/* labels */}
-          {net.corridors.map((c) =>
+          {net.corridors.map((c, ci) =>
             c.labels.map((lb: Label, i) => (
               <text
                 key={`l${i}`}
+                data-ci={ci}
+                style={{ ...fade, opacity: dim(ci) }}
                 className={`lb lb${lb.lod}`}
                 x={lb.x}
                 y={lb.y}
@@ -385,7 +445,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             if (!trunk || !s0) return null
             const bx = s0.x - P * 1.9
             return (
-              <g key={`nb${i}`} className="nameboard" transform={`translate(${bx} ${c.trunkY})`}>
+              <g key={`nb${i}`} className="nameboard" data-ci={i} style={{ ...fade, opacity: dim(i) }} transform={`translate(${bx} ${c.trunkY})`}>
                 <rect x={-22} y={-11} width={22} height={22} rx={5} fill={trunk.color} />
                 <text className="nb-code" x={-11} y={4} textAnchor="middle">
                   S{i + 1}

@@ -25,6 +25,8 @@ export interface RideLeg {
   path: Pt[][]
   /** arc length in world px */
   len: number
+  /** world points where the train crosses a junction: fork descents and merge rejoins */
+  switches: Pt[]
 }
 
 export interface Ride {
@@ -132,13 +134,15 @@ export function buildRide(net: Network, corridorIdx: number): Ride | null {
     return out
   }
 
-  const route = (a: RideStop, b: RideStop): Pt[][] => {
+  const route = (a: RideStop, b: RideStop): { path: Pt[][]; switches: Pt[] } => {
+    const switches: Pt[] = []
+    const direct = (path: Pt[][]) => ({ path, switches })
     // works spurs: hop straight to/from the badge — it's a fly-off, not a track
-    if (b.kind === 'works' || a.kind === 'works') return [[{ x: a.x, y: a.y }, { x: b.x, y: b.y }]]
+    if (b.kind === 'works' || a.kind === 'works') return direct([[{ x: a.x, y: a.y }, { x: b.x, y: b.y }]])
     const lineA = ctx.lineOf.get(a.lineId!)
     const lineB = ctx.lineOf.get(b.lineId!)
-    if (!lineA || !lineB) return [[{ x: a.x, y: a.y }, { x: b.x, y: b.y }]]
-    if (lineA.id === lineB.id) return [travel({ x: a.x, y: a.y }, { x: b.x, y: b.y })]
+    if (!lineA || !lineB) return direct([[{ x: a.x, y: a.y }, { x: b.x, y: b.y }]])
+    if (lineA.id === lineB.id) return direct([travel({ x: a.x, y: a.y }, { x: b.x, y: b.y })])
 
     const parts: Pt[][] = []
     let cur: Pt = { x: a.x, y: a.y }
@@ -157,6 +161,7 @@ export function buildRide(net: Network, corridorIdx: number): Ride | null {
         parts.push(travel(cur, { x: last.x, y: last.y }))
         for (const jp of mergeJoin(curLine)) parts.push(jp)
         cur = { x: p.viaMerge.x, y: p.viaMerge.y }
+        switches.push({ x: p.viaMerge.x, y: p.viaMerge.y })
       } else {
         // no recorded merge: back up the descent to the fork
         parts.push(travel(cur, { x: p.viaFork.x, y: p.viaFork.y }))
@@ -179,6 +184,7 @@ export function buildRide(net: Network, corridorIdx: number): Ride | null {
       if (!pc || !F || pc.lineId !== curLine.id) break
       parts.push(travel(cur, { x: F.x, y: F.y }))
       parts.push(descentPts(child))
+      switches.push({ x: F.x, y: F.y })
       cur = child.stations[0] ? { x: child.stations[0].x, y: child.stations[0].y } : { x: F.x, y: F.y }
       curLine = child
     }
@@ -197,13 +203,13 @@ export function buildRide(net: Network, corridorIdx: number): Ride | null {
       if (cut > 0) out.push(p.slice(0, cut), p.slice(cut))
       else out.push(p)
     }
-    return out.filter((s) => s.length > 1)
+    return direct(out.filter((s) => s.length > 1))
   }
 
   const legs: RideLeg[] = []
   for (let i = 1; i < stops.length; i++) {
-    const path = route(stops[i - 1]!, stops[i]!)
-    legs.push({ stop: stops[i]!, path, len: Math.max(1, pathLen(path)) })
+    const { path, switches } = route(stops[i - 1]!, stops[i]!)
+    legs.push({ stop: stops[i]!, path, len: Math.max(1, pathLen(path)), switches })
   }
   return { corridorIdx, legs, total: legs.reduce((n, l) => n + l.len, 0), stops }
 }
