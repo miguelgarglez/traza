@@ -1,0 +1,12 @@
+:root {
+  --field: #edf0f5;
+  --ink: #1c2733;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: 'Fira Sans', system-ui, sans-serif;
+  background: var(--field);
+  color: var(--ink);
+}

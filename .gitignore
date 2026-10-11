@@ -1,0 +1,6 @@
+node_modules/
+dist/
+dist-single/
+.playwright-mcp/
+.DS_Store
+.vercel

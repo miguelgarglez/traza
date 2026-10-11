@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-10-10T09:30:00.000Z",
+  "sessions": [
+    {
+      "agent": "devin",
+      "id": "mellow-fern",
+      "title": "fern CLI: add --json output",
+      "cwd": "/Users/miguel/work/fern",
+      "start": "2026-10-10T09:14:00.000Z"
+    },
+    {
+      "agent": "codex",
+      "id": "c0ffee-fern-1",
+      "title": "review --json diff",
+      "cwd": "/Users/miguel/work/fern",
+      "start": "2026-10-10T09:30:00.000Z"
+    },
+    {
+      "agent": "cursor",
+      "id": "chat-fern",
+      "title": "add --width flag",
+      "cwd": "/Users/miguel/work/fern",
+      "start": "2026-10-10T10:30:00.000Z"
+    }
+  ]
+}
