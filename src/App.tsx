@@ -440,7 +440,7 @@ export default function App() {
 
   return (
     <main
-      className={`stage${net ? ' hasnet' : ''}${playing ? ' night' : ''}`}
+      className={`stage${net ? ' hasnet' : ''}${playing ? ' night' : ''}${sel ? ' selopen' : ''}`}
       onPointerDown={hint ? seen : undefined}
       onWheel={hint ? seen : undefined}
     >

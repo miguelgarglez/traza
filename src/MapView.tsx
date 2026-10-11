@@ -70,6 +70,13 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     setHoverRaw(h)
   }
   const [fresh, setFresh] = useState(true)
+  const litEl = useRef<SVGGElement | null>(null)
+  const litCheck = useRef<{ x: number; y: number } | null>(null)
+  const setLit = (sid: string | null) => {
+    litEl.current?.classList.remove('lit')
+    litEl.current = sid ? (svgRef.current?.querySelector(`[data-sid="${CSS.escape(sid)}"]`) as SVGGElement | null) ?? null : null
+    litEl.current?.classList.add('lit')
+  }
   const drag = useRef<{ px: number; py: number; cx: number; cy: number; moved: boolean; panning?: boolean } | null>(null)
   const pinch = useRef<{ d: number; k: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -153,6 +160,21 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       g.setAttribute('transform', `translate(${wx} ${wy}) rotate(${angle})`)
       g.style.display = visible ? '' : 'none'
       if (color) g.style.setProperty('--train', color)
+      // platform lights: the station the train is at or approaching glows
+      if (!visible) {
+        setLit(null)
+        return
+      }
+      if (!litCheck.current || Math.hypot(wx - litCheck.current.x, wy - litCheck.current.y) > 24) {
+        litCheck.current = { x: wx, y: wy }
+        let best: Station | null = null
+        let bd = 72
+        for (const s of stationIndex.values()) {
+          const dd = Math.hypot(s.x - wx, s.y - wy)
+          if (dd < bd) { bd = dd; best = s }
+        }
+        setLit(best?.id ?? null)
+      }
     },
     keepInView: (wx, wy) => {
       const svg = svgRef.current
@@ -161,10 +183,13 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       const { px, py } = toScreen(wx, wy)
       const mx = r.width * 0.18
       const my = r.height * 0.2
+      // an open inspector reserves the right edge — the followed station
+      // should stay visible beside it, not slide underneath
+      const rightPad = sel ? Math.min(340, r.width * 0.3) : 0
       let tx = 0
       let ty = 0
       if (px < mx) tx = mx - px
-      else if (px > r.width - mx) tx = r.width - mx - px
+      else if (px > r.width - mx - rightPad) tx = r.width - mx - rightPad - px
       if (py < my) ty = my - py
       else if (py > r.height - my) ty = r.height - my - py
       if (tx || ty) {
@@ -198,9 +223,11 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     apply()
   }
 
-  // initial fit once the net changes; the plano "lays track" for a moment
+  // initial fit once the net changes; the plano "lays track" for a moment.
+  // Open on the first service — the whole network is a zoom-out away ('f').
   useEffect(() => {
-    fitTo(net.bounds.x0, net.bounds.y0, net.bounds.x1, net.bounds.y1, false)
+    const b = corridorBounds[0] ?? net.bounds
+    fitTo(b.x0 - 30, b.y0 - U * 0.7, b.x1 + 30, b.y1 + U * 0.7, false)
     setFresh(!reduced)
     const t = setTimeout(() => setFresh(false), 2600)
     return () => clearTimeout(t)
@@ -227,6 +254,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }, [])
 
   const onPointerDown = (e: React.PointerEvent) => {
+    // a gesture always wins over a camera flight — nothing fights the hand
+    if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pointers.current.size === 2) {
@@ -304,6 +333,27 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     setHover({ s, px, py })
   }
 
+  // per-corridor extents — zones hug their service, not the whole map
+  const corridorBounds = useMemo(() => {
+    return net.corridors.map((c) => {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      const eat = (p: { x: number; y: number }) => {
+        x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y)
+      }
+      for (const l of c.lines) {
+        for (const sg of l.segs) sg.pts.forEach(eat)
+        l.stations.forEach(eat)
+      }
+      for (const w of c.works) eat(w)
+      for (const lb of c.labels) eat(lb)
+      const trunk = c.lines.find((l) => l.trunk)
+      const s0 = trunk?.stations[0]
+      if (trunk && s0) x0 = Math.min(x0, s0.x - P * 1.9 - 40 - trunk.service.length * 6.4)
+      if (!isFinite(x0)) return { x0: 0, y0: c.y0, x1: 400, y1: c.y0 + c.height }
+      return { x0, y0, x1, y1 }
+    })
+  }, [net])
+
   // indexes
   const { stationIndex, worksIndex } = useMemo(() => {
     const si = new Map<string, Station>()
@@ -333,6 +383,17 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
         onPointerOver={onOver}
         onPointerLeave={() => setHover(null)}
       >
+        <defs>
+          <linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#ffedb8" stopOpacity="0.8" />
+            <stop offset="0.55" stopColor="#ffe9a6" stopOpacity="0.28" />
+            <stop offset="1" stopColor="#ffe9a6" stopOpacity="0" />
+          </linearGradient>
+          <radialGradient id="poolGrad">
+            <stop offset="0" stopColor="#fff3c8" stopOpacity="0.5" />
+            <stop offset="1" stopColor="#fff3c8" stopOpacity="0" />
+          </radialGradient>
+        </defs>
         <g ref={worldRef} className="world">
           {/* zone bands behind each corridor */}
           {net.corridors.map((c, i) => (
@@ -341,9 +402,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               className="zone"
               data-ci={i}
               style={{ ...fade, opacity: dim(i) }}
-              x={net.bounds.x0 + 10}
+              x={corridorBounds[i]!.x0 - 26}
               y={c.y0 - U * 0.45}
-              width={net.bounds.x1 - net.bounds.x0 - 20}
+              width={corridorBounds[i]!.x1 - corridorBounds[i]!.x0 + 52}
               height={c.height - U * 0.35}
               rx={26}
             />
@@ -437,7 +498,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
           </g>
           {/* the ride token — a little metro car riding the track */}
           <g ref={trainRef} className="train" style={{ display: 'none' }}>
-            <ellipse className="beam" cx={34} cy={0} rx={26} ry={9} />
+            <path className="beam" d="M14 -4 L64 -16 L64 16 L14 4 Z" />
+            <circle className="pool" cx={34} cy={0} r={13} />
             <rect className="car" x={-15} y={-7} width={30} height={14} rx={7} />
             <rect className="win" x={-8} y={-3.4} width={7} height={6.8} rx={2} />
             <rect className="win" x={1} y={-3.4} width={7} height={6.8} rx={2} />
