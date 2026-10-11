@@ -53,7 +53,6 @@ for (const c of net.corridors) {
     }
   }
   for (const w of c.works) {
-    svg += `<path d="M${w.at ? '' : ''}" fill="none"/>`
     const a = c.lines.flatMap((l) => l.stations).find((s) => s.id === w.at.stationId)
     if (a) svg += `<path d="M${a.x} ${a.y} l${w.x - a.x > 0 ? 12 : -12} ${Math.min(30, w.y - a.y)}" stroke="#5A6B80" stroke-width="2.5" stroke-dasharray="4 4" fill="none"/><rect x="${w.x - 8}" y="${w.y - 8}" width="16" height="16" rx="3" fill="#fff" stroke="#5A6B80" stroke-width="2"/><text x="${w.x}" y="${w.y + 4}" text-anchor="middle" font-size="10" font-weight="600" fill="#1C2733">${w.count > 9 ? '9+' : w.count}</text>`
   }
@@ -61,7 +60,7 @@ for (const c of net.corridors) {
     if (lb.lod > 1) continue
     const a = c.lines.flatMap((l) => l.stations).find((s) => s.id === lb.stationId)
     if (!a) continue
-    svg += `<text x="${lb.x}" y="${lb.y}" font-size="9.5" font-weight="500" fill="#1C2733" text-anchor="middle" transform="rotate(-35 ${lb.x} ${lb.y})">${esc(lb.text)}</text>`
+    svg += `<text x="${lb.x}" y="${lb.y}" font-size="9.5" font-weight="500" fill="#1C2733" text-anchor="${lb.side < 0 ? 'start' : 'end'}" transform="rotate(-35 ${lb.x} ${lb.y})">${esc(lb.text)}</text>`
   }
   const trunk = c.lines.find((l) => l.trunk)
   if (trunk) svg += `<text x="${trunk.stations[0]?.x - 20 ?? 0}" y="${c.trunkY - 16}" font-size="13" font-weight="700" fill="${trunk.color}" text-anchor="end">${esc(trunk.service)}</text>`

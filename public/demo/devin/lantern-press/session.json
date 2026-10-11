@@ -1,0 +1,14 @@
+{
+  "id": "lantern-press",
+  "title": "posters: editorial print grid + plate panel",
+  "model": "swe-2-high",
+  "working_directory": "/Users/miguel/work/lantern",
+  "main_chain_id": 6,
+  "subagents": [
+    "sidekick",
+    "subagent@1",
+    "subagent@2"
+  ],
+  "created_at": "2026-10-09T16:20:00.000Z",
+  "last_activity_at": "2026-10-09T16:21:50.000Z"
+}

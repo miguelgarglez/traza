@@ -55,6 +55,7 @@ export interface Works {
   count: number
   label: string
   stepIds: string[]
+  steps: Step[]
 }
 
 export interface Label {
@@ -118,7 +119,8 @@ interface MarkBag {
 
 export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
   const spine = session.threads.find((t) => t.kind === 'spine') ?? session.threads[0]
-  const color = AGENT_COLORS[session.agent] ?? EXTRA_COLORS[0]
+  if (!spine) return { session, lines: [], works: [], labels: [], height: U * 1.6, trunkY: 0 }
+  const color = AGENT_COLORS[session.agent] ?? EXTRA_COLORS[0] ?? '#0F4E9E'
   const lines: Line[] = []
   const works: Works[] = []
   const stationOf = new Map<string, Station>() // step id -> station
@@ -201,7 +203,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
     return { parentId: p ?? spine.id, chain }
   }
 
-  const collapsedWorks: { line: Line; station: Station; count: number; label: string; stepIds: string[] }[] = []
+  const collapsedWorks: { line: Line; station: Station; count: number; label: string; stepIds: string[]; steps: Step[] }[] = []
   const collapsedSeen = new Set<string>()
   const worksFrom = (t: Thread) => {
     if (collapsedSeen.has(t.id)) return
@@ -213,8 +215,9 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
       const hit = c.forkStep ? stationOf.get(c.forkStep) : undefined
       if (hit && hit.lineId === parentLine.id) { st = hit; break }
     }
-    st ??= parentLine.stations[Math.max(0, parentLine.stations.length - 2)]
-    collapsedWorks.push({ line: parentLine, station: st, count: t.steps.length, label: t.label || 'offshoot', stepIds: t.steps.map((s) => s.id) })
+    st ??= parentLine.stations[Math.max(0, parentLine.stations.length - 2)] ?? parentLine.stations[0]
+    if (!st) return
+    collapsedWorks.push({ line: parentLine, station: st, count: t.steps.length, label: t.label || 'offshoot', stepIds: t.steps.map((s) => s.id), steps: t.steps })
   }
 
   // Resolve a step id to a station on a line; when it doesn't resolve, fall
@@ -242,7 +245,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
   // first parent node numbered after the branch's last node. Real provenance.
   const numOf = (id?: string) => {
     const m = id?.match(/^n(\d+)$/)
-    return m ? parseInt(m[1], 10) : NaN
+    return m ? parseInt(m[1]!, 10) : NaN
   }
   const mergeByOrd = (line: Line, t: Thread): Station | undefined => {
     const nums = t.steps.map((s) => numOf(s.id)).filter((n) => !isNaN(n))
@@ -340,7 +343,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
       occupy(row, Math.min(baseX, firstX) - U * 0.4, extentX + U * 0.4)
       stationsOnRow.set(row, [...(stationsOnRow.get(row) ?? []), ...Array.from({ length: n }, (_, j) => firstX + j * P)])
 
-      const lineColor = session.agent === 'unknown' ? EXTRA_COLORS[extraIdx++ % EXTRA_COLORS.length] : color
+      const lineColor = session.agent === 'unknown' ? (EXTRA_COLORS[extraIdx++ % EXTRA_COLORS.length] ?? color) : color
       const y = row * U
       const line: Line = {
         id: t.id,
@@ -352,7 +355,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
         stations: [],
         segs: [],
         row,
-        forkStation: { lineId: parentLine.id, stationId: forkSt.id, inferred: forkInferred },
+        forkStation: { lineId: parentLine.id, stationId: forkSt!.id, inferred: forkInferred },
       }
       // fork -> (optional jog along the parent track) -> 45° descent -> row
       const pts: Pt[] = [{ x: forkSt.x, y: forkSt.y }]
@@ -419,15 +422,15 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
   // stubs. Real exports generate hundreds of tiny marks; a corridor shows at
   // most ~3 spurs per line — individual when few, one aggregated spur at the
   // median anchor when many.
-  interface WorkItem { line: Line; station: Station; count: number; label: string; stepIds: string[] }
+  interface WorkItem { line: Line; station: Station; count: number; label: string; stepIds: string[]; steps: Step[] }
   const workItems = new Map<string, WorkItem[]>()
-  const pushWork = (line: Line, station: Station | undefined, count: number, label: string, stepIds: string[]) => {
+  const pushWork = (line: Line, station: Station | undefined, count: number, label: string, stepIds: string[], steps: Step[]) => {
     if (!station) return
     const arr = workItems.get(line.id) ?? []
-    arr.push({ line, station, count, label, stepIds })
+    arr.push({ line, station, count, label, stepIds, steps })
     workItems.set(line.id, arr)
   }
-  for (const w of collapsedWorks) pushWork(w.line, w.station, w.count, w.label, w.stepIds)
+  for (const w of collapsedWorks) pushWork(w.line, w.station, w.count, w.label, w.stepIds, w.steps)
   for (const t of session.threads) {
     const bag = (t as Thread & MarkBag).marks ?? []
     const line = byId.get(t.id) ?? trunk
@@ -435,7 +438,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
       const st =
         (m.anchorNode != null ? stationOf.get(`n${m.anchorNode}`) : undefined) ??
         line.stations[line.stations.length - 1]
-      pushWork(line, st, m.count, m.label, m.steps.map((s) => s.id))
+      pushWork(line, st, m.count, m.label, m.steps.map((s) => s.id), m.steps)
     }
   }
   for (const [lineId, items] of workItems) {
@@ -450,6 +453,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
         count: group.reduce((n, g) => n + g.count, 0),
         label: group.length === 1 ? group[0]!.label : 'offshoots',
         stepIds: group.flatMap((g) => g.stepIds),
+        steps: group.flatMap((g) => g.steps),
       })
     }
     if (items.length <= 3) items.forEach((w, k) => emit([w], k))
@@ -459,7 +463,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
       const x1 = items[items.length - 1]!.station.x
       const span = Math.max(1, x1 - x0)
       const buckets: WorkItem[][] = [[], [], []]
-      for (const w of items) buckets[Math.min(2, Math.floor(((w.station.x - x0) / span) * 3))].push(w)
+      for (const w of items) buckets[Math.min(2, Math.floor(((w.station.x - x0) / span) * 3))]?.push(w)
       buckets.filter((b) => b.length).forEach((b, k) => emit(b, k))
     }
   }
@@ -475,15 +479,18 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
   for (const s of candidates) {
     const side: 1 | -1 = s.ord % 2 === 0 ? -1 : 1
     const w = s.name.length * 4.6 + 10
-    const ly = s.y + side * 14
-    const box = { x0: s.x - w / 2, x1: s.x + w / 2, y: ly }
+    // Beck labels: above-the-line text runs up-right (anchor start, offset
+    // just right of the glyph); below-the-line runs down-left (anchor end).
+    const lx = s.x + (side < 0 ? 9 : -9)
+    const ly = s.y + side * 11
+    const box = side < 0 ? { x0: lx, x1: lx + w, y: ly } : { x0: lx - w, x1: lx, y: ly }
     let lod = s.tier === 'local' ? 2 : 0
     const clash = placed.some((b) => Math.abs(b.y - ly) < 12 && !(box.x1 < b.x0 || box.x0 > b.x1))
     if (clash) lod++
     if (lod === 0) lod0++
     if (lod <= 2) {
       placed.push(box)
-      labels.push({ x: s.x, y: ly, side, text: s.name, lod, stationId: s.id })
+      labels.push({ x: lx, y: ly, side, text: s.name, lod, stationId: s.id })
     }
   }
   // guarantee a few lod-0 names even on dense maps: upgrade the first majors
@@ -493,7 +500,6 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
 
   const maxRow = Math.max(0, ...lines.map((l) => l.row)) * U
   const maxWorks = Math.max(0, ...works.map((w) => w.y))
-  const maxX = Math.max(P * 8, ...lines.flatMap((l) => l.segs.flatMap((s) => s.pts.map((p) => p.x))), ...works.map((w) => w.x))
   const height = U * 1.6 + maxRow + Math.max(maxWorks, 0) + U * 1.2
   return { session, lines, works, labels, height, trunkY: 0 }
 }
@@ -502,7 +508,7 @@ export function buildNetwork(weave: Weave): Network {
   const corridors: Corridor[] = []
   let y = 0
   const sorted = [...weave.sessions].sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity))
-  sorted.forEach((s, i) => {
+  sorted.forEach((s) => {
     const c = buildCorridor(s)
     corridors.push({ ...c, y0: y, trunkY: y })
     // shift all geometry down by corridor base
@@ -513,13 +519,17 @@ export function buildNetwork(weave: Weave): Network {
     for (const w of c.works) w.y += y
     for (const l of c.labels) l.y += y
     y += c.height + U * 1.6
-    void i
   })
   const x1 = Math.max(600, ...corridors.flatMap((c) => c.lines.flatMap((l) => l.segs.flatMap((s) => s.pts.map((p) => p.x)))), ...corridors.flatMap((c) => c.works.map((w) => w.x)))
+  // nameboards anchor left of each trunk's first stop; reserve the room
+  const nbPad = Math.max(0, ...corridors.map((c) => {
+    const t = c.lines.find((l) => l.trunk)
+    return t ? t.service.length * 7 + 80 : 0
+  }))
   const stations = corridors.reduce((n, c) => n + c.lines.reduce((m, l) => m + l.stations.length, 0), 0)
   return {
     corridors,
-    bounds: { x0: -P * 6, y0: -U, x1: x1 + P * 6, y1: y },
+    bounds: { x0: -Math.max(P * 6, nbPad), y0: -U, x1: x1 + P * 6, y1: y },
     stats: { stations, lines: corridors.reduce((n, c) => n + c.lines.length, 0), works: corridors.reduce((n, c) => n + c.works.length, 0) },
   }
 }

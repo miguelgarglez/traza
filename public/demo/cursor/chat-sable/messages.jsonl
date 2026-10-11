@@ -1,0 +1,4 @@
+{"role":"user","text":"why does the vignette shader band on dark gradients?"}
+{"role":"assistant","text":"Almost certainly 8-bit quantization — the gradient lives in 256 steps. Add ordered dithering in the fragment stage; it costs one texture lookup."}
+{"role":"user","text":"show me"}
+{"role":"assistant","text":"See the edit in shaders/vignette.frag — a 4x4 Bayer matrix thresholds the fragment before write-out."}

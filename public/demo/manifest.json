@@ -1,0 +1,20 @@
+{
+  "sessions": [
+    {
+      "id": "lantern-press",
+      "agent": "devin",
+      "title": "posters: editorial print grid + plate panel",
+      "cwd": "/Users/miguel/work/lantern"
+    },
+    {
+      "id": "palette",
+      "agent": "codex",
+      "title": "palette: --dry → --check rename"
+    },
+    {
+      "id": "chat-sable",
+      "agent": "cursor",
+      "title": "vignette banding fix"
+    }
+  ]
+}
