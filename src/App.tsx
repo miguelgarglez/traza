@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ingest, type DroppedFile } from './lib/parse/ingest.ts'
 import { buildNetwork, type Network, type Station, type Works } from './lib/metro.ts'
+import { buildRide, legPoint, type Ride } from './lib/ride.ts'
 import type { Weave } from './lib/model.ts'
 import { filesFromDrop, filesFromInput, loadDemo } from './lib/files.ts'
 import MapView, { type MapHandle } from './MapView.tsx'
@@ -23,6 +24,106 @@ export default function App() {
   const dirPick = useRef<HTMLInputElement>(null)
 
   const net: Network | null = useMemo(() => (weave && weave.sessions.length ? buildNetwork(weave) : null), [weave])
+
+  // ---- the ride ----
+  const [svcIdx, setSvcIdx] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [speed, setSpeed] = useState(1)
+  const [rideUi, setRideUi] = useState<{ stop: number; total: number; name: string; next: string } | null>(null)
+  const rideRef = useRef<{ leg: number; dist: number; dwell: number }>({ leg: 0, dist: 0, dwell: 0 })
+  const reduced = useMemo(() => matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+
+  const ride: Ride | null = useMemo(
+    () => (net && net.corridors.length ? buildRide(net, Math.min(svcIdx, net.corridors.length - 1)) : null),
+    [net, svcIdx],
+  )
+
+  // reset ride when the network or service changes
+  useEffect(() => {
+    rideRef.current = { leg: 0, dist: 0, dwell: 0 }
+    setPlaying(false)
+    setRideUi(
+      ride && ride.stops.length > 1
+        ? { stop: 1, total: ride.stops.length, name: ride.stops[0]!.name, next: ride.stops[1]!.name }
+        : null,
+    )
+    map.current?.setTrain(0, 0, 0, false)
+  }, [ride])
+
+  useEffect(() => {
+    if (!playing || !ride?.legs.length) return
+    let raf = 0
+    let last = performance.now()
+    const PXS = 300 // world px/s at 1×
+    const tick = (now: number) => {
+      const dt = Math.min(64, now - last)
+      last = now
+      const rp = rideRef.current
+      const leg = ride.legs[rp.leg]
+      if (!leg) {
+        setPlaying(false)
+        return
+      }
+      if (rp.dwell > 0) {
+        rp.dwell -= dt * speed
+        raf = requestAnimationFrame(tick)
+        return
+      }
+      if (reduced) {
+        // reduced motion: hop straight to the next stop, short beat
+        rp.dist = leg.len
+      } else {
+        rp.dist += (PXS * speed * dt) / 1000
+      }
+      if (rp.dist >= leg.len) {
+        // arrived at leg.stop
+        rp.leg += 1
+        rp.dist = 0
+        rp.dwell = 150
+        const arrived = leg.stop
+        setSel(arrived.kind === 'station' ? arrived.id : null)
+        setRideUi({
+          stop: rp.leg + 1,
+          total: ride.stops.length,
+          name: arrived.name,
+          next: ride.legs[rp.leg]?.stop.name ?? 'terminus',
+        })
+        map.current?.setTrain(arrived.x, arrived.y, 0, true, lineColorOf(net, arrived.lineId))
+        map.current?.keepInView(arrived.x, arrived.y)
+        try {
+          navigator.vibrate?.(6)
+        } catch {
+          /* not supported */
+        }
+        if (rp.leg >= ride.legs.length) {
+          setPlaying(false)
+          return
+        }
+      } else {
+        const p = legPoint(leg, rp.dist)
+        map.current?.setTrain(p.x, p.y, p.angle, true, lineColorOf(net, leg.stop.lineId))
+        map.current?.keepInView(p.x, p.y)
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, ride, speed, reduced, net])
+
+  const rideTo = useCallback(
+    (stopIdx: number) => {
+      if (!ride || !ride.stops.length) return
+      const k = Math.max(0, Math.min(ride.stops.length - 1, stopIdx))
+      rideRef.current = { leg: Math.min(k, ride.legs.length - 1), dist: 0, dwell: 0 }
+      const stop = ride.stops[k]!
+      setSel(stop.kind === 'station' ? stop.id : null)
+      setRideUi({ stop: k + 1, total: ride.stops.length, name: stop.name, next: ride.stops[k + 1]?.name ?? 'terminus' })
+      map.current?.setTrain(stop.x, stop.y, 0, true, lineColorOf(net, stop.lineId))
+      map.current?.flyTo(stop.x, stop.y, 700, 420)
+    },
+    [ride, net],
+  )
 
   const load = useCallback(async (dropped: DroppedFile[], staged = true) => {
     if (!dropped.length) {
@@ -172,10 +273,15 @@ export default function App() {
       else if (k === '+' || k === '=') map.current?.zoomBy(1.5)
       else if (k === '-') map.current?.zoomBy(1 / 1.5)
       else if (k === 'o') filePick.current?.click()
+      else if (k === ' ') {
+        e.preventDefault()
+        if (ride?.legs.length) setPlaying((p) => !p)
+      } else if (k === '[' && ride) rideTo((rideUi?.stop ?? 1) - 1)
+      else if (k === ']' && ride) rideTo((rideUi?.stop ?? 0) + 1)
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [stepAlong, switchLine])
+  }, [stepAlong, switchLine, ride, rideUi, rideTo])
 
   const stats = weave?.stats
   const demoLoaded = files.some((f) => f.path.startsWith('demo/'))
@@ -268,6 +374,47 @@ export default function App() {
         </section>
       )}
 
+      {/* transport dock — the ride */}
+      {net && ride && ride.stops.length > 1 && rideUi && (
+        <section className="dock" aria-label="ride controls">
+          <div className="svcpick">
+            <button aria-label="previous service" onClick={() => setSvcIdx((i) => (i - 1 + net.corridors.length) % net.corridors.length)}>‹</button>
+            <i className="svcchip" style={{ background: net.corridors[ride.corridorIdx]?.lines.find((l) => l.trunk)?.color }}>
+              S{ride.corridorIdx + 1}
+            </i>
+            <button aria-label="next service" onClick={() => setSvcIdx((i) => (i + 1) % net.corridors.length)}>›</button>
+          </div>
+          <button className="skip" aria-label="previous stop" onClick={() => rideTo(rideUi.stop - 2)} disabled={rideUi.stop <= 1}>|◀</button>
+          <button
+            className={playing ? 'play on' : 'play'}
+            onClick={() => {
+              if (!playing && rideRef.current.leg >= ride.legs.length) rideTo(0)
+              setPlaying(!playing)
+            }}
+            aria-label={playing ? 'pause the ride' : 'ride the line'}
+          >
+            {playing ? '❚❚' : '▶'}
+          </button>
+          <button className="skip" aria-label="next stop" onClick={() => rideTo(rideUi.stop)} disabled={rideUi.stop >= rideUi.total}>▶|</button>
+          <div className="rideinfo">
+            <b>{rideUi.name}</b>
+            <div className="rideprog" aria-hidden>
+              <i style={{ width: `${(rideUi.stop / rideUi.total) * 100}%` }} />
+            </div>
+            <span>
+              stop {rideUi.stop} of {rideUi.total} · next {rideUi.next}
+            </span>
+          </div>
+          <div className="speeds">
+            {[1, 2, 4].map((s) => (
+              <button key={s} className={speed === s ? 'on' : ''} onClick={() => setSpeed(s)}>
+                {s}×
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {net && <Inspector net={net} sel={sel} onClose={() => setSel(null)} onJump={jump} onPrevNext={stepAlong} />}
 
       {hint && net && (
@@ -340,6 +487,12 @@ export default function App() {
       />
     </main>
   )
+}
+
+function lineColorOf(net: Network | null, lineId?: string): string {
+  if (!net || !lineId) return '#0F4E9E'
+  for (const c of net.corridors) for (const l of c.lines) if (l.id === lineId) return l.color
+  return '#0F4E9E'
 }
 
 // decorative ghost schematic for the empty state

@@ -6,6 +6,10 @@ export interface MapHandle {
   fit: () => void
   flyTo: (x: number, y: number, w?: number, h?: number) => void
   zoomBy: (f: number) => void
+  /** move the ride token; 60fps-imperative, no react render */
+  setTrain: (x: number, y: number, angle: number, visible: boolean, color?: string) => void
+  /** keep a world point inside the comfortable view area (ride follow) */
+  keepInView: (x: number, y: number) => void
 }
 
 interface Props {
@@ -42,6 +46,7 @@ function stationGlyph(s: Station, color: string, sel: boolean) {
 const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks }, ref) {
   const svgRef = useRef<SVGSVGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
+  const trainRef = useRef<SVGGElement>(null)
   const cam = useRef({ x: 0, y: 0, k: 0.1 })
   const raf = useRef(0)
   const flight = useRef<number | null>(null)
@@ -112,6 +117,32 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       if (!svg) return
       const r = svg.getBoundingClientRect()
       zoomAt(r.width / 2, r.height / 2, f)
+    },
+    setTrain: (wx, wy, angle, visible, color) => {
+      const g = trainRef.current
+      if (!g) return
+      g.setAttribute('transform', `translate(${wx} ${wy}) rotate(${angle})`)
+      g.style.display = visible ? '' : 'none'
+      if (color) g.style.setProperty('--train', color)
+    },
+    keepInView: (wx, wy) => {
+      const svg = svgRef.current
+      if (!svg) return
+      const r = svg.getBoundingClientRect()
+      const { px, py } = toScreen(wx, wy)
+      const mx = r.width * 0.18
+      const my = r.height * 0.2
+      let tx = 0
+      let ty = 0
+      if (px < mx) tx = mx - px
+      else if (px > r.width - mx) tx = r.width - mx - px
+      if (py < my) ty = my - py
+      else if (py > r.height - my) ty = r.height - my - py
+      if (tx || ty) {
+        cam.current.x += tx * 0.12 // eased follow — never snaps
+        cam.current.y += ty * 0.12
+        apply()
+      }
     },
   }))
 
@@ -326,6 +357,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               <circle className="halo-dot" cx={selStation.x} cy={selStation.y} r={13} />
             </g>
           )}
+          {/* the ride token — a little metro car riding the track */}
+          <g ref={trainRef} className="train" style={{ display: 'none' }}>
+            <rect className="car" x={-15} y={-7} width={30} height={14} rx={7} />
+            <rect className="win" x={-8} y={-3.4} width={7} height={6.8} rx={2} />
+            <rect className="win" x={1} y={-3.4} width={7} height={6.8} rx={2} />
+          </g>
           {/* labels */}
           {net.corridors.map((c) =>
             c.labels.map((lb: Label, i) => (
