@@ -4,3 +4,4 @@ dist-single/
 .playwright-mcp/
 .DS_Store
 .vercel
+test/out/
