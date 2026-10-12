@@ -545,6 +545,14 @@ export default function App() {
           <button className="keyhead" onClick={() => setKeyOpen(!keyOpen)}>
             <b>key</b>
             <span>{net.stats.stations} stops · {net.stats.lines} lines{net.stats.works ? ` · ${net.stats.works} works` : ''}</span>
+            {ride && (
+              <em className="svcnow">
+                <i className="svcchip" style={{ background: net.corridors[ride.corridorIdx]?.lines.find((l) => l.trunk)?.color }}>
+                  S{ride.corridorIdx + 1}
+                </i>
+                <u>{net.corridors[ride.corridorIdx]?.session.title}</u>
+              </em>
+            )}
             <i>{keyOpen ? '▾' : '▴'}</i>
           </button>
           {keyOpen && (
@@ -907,6 +915,9 @@ function RideProg({ stop, total, names, onSeek }: { stop: number; total: number;
   )
 }
 
+/** full step title — the map label is truncated for the plano */
+const fullTitle = (s: Station) => s.step.title?.trim().replace(/^<[^>]+>\s*/, '') || s.name
+
 /** "Where to?" — citymapper-style station finder over names, actors and tools. */
 function Finder({ net, onGo, onClose }: { net: Network; onGo: (s: Station) => void; onClose: () => void }) {
   const [q, setQ] = useState('')
@@ -932,7 +943,7 @@ function Finder({ net, onGo, onClose }: { net: Network; onGo: (s: Station) => vo
     return all
       .filter(
         ({ s }) =>
-          s.name.toLowerCase().includes(t) ||
+          fullTitle(s).toLowerCase().includes(t) ||
           s.step.actor.includes(t) ||
           (s.step.calls ?? []).some((c) => c.name.toLowerCase().includes(t)),
       )
@@ -962,7 +973,7 @@ function Finder({ net, onGo, onClose }: { net: Network; onGo: (s: Station) => vo
           {hits.map((h, i) => (
             <li key={h.s.id} className={i === idx ? 'hit' : ''} onPointerEnter={() => setIdx(i)} onClick={() => (onGo(h.s), onClose())}>
               <i style={{ background: h.color }} />
-              <b>{h.s.name}</b>
+              <b>{fullTitle(h.s)}</b>
               <span>
                 {h.svc} · {h.s.step.actor}
                 {h.s.step.calls?.[0] ? ` · ${h.s.step.calls[0].name}` : ''}

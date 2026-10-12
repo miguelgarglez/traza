@@ -57,16 +57,22 @@ function CallRow({ c }: { c: NonNullable<Step['calls']>[number] }) {
 /** mobile sheet rail — drag it up to expand, down to tuck, tap to toggle */
 function Grab({ full, setFull }: { full: boolean; setFull: (f: boolean) => void }) {
   const moved = useRef(false)
+  // a station tap can retarget the click to the freshly-mounted rail when
+  // the sheet opens under the finger — only a press that began on the
+  // rail itself is allowed to toggle
+  const armed = useRef(false)
   return (
     <button
       className="grab"
       aria-label={full ? 'shrink details — or drag down' : 'expand details — or drag up'}
       onPointerDown={(e) => {
-        const sheet = e.currentTarget.parentElement as HTMLElement
+        const rail = e.currentTarget // kept — the synthetic event nulled later
+        const sheet = rail.parentElement as HTMLElement
         const startY = e.clientY
         const startH = sheet.getBoundingClientRect().height
         moved.current = false
-        e.currentTarget.setPointerCapture(e.pointerId)
+        armed.current = true
+        rail.setPointerCapture(e.pointerId)
         sheet.classList.add('dragging') // the sheet follows the finger — no transition
         const move = (ev: PointerEvent) => {
           const dy = ev.clientY - startY
@@ -74,7 +80,11 @@ function Grab({ full, setFull }: { full: boolean; setFull: (f: boolean) => void 
           sheet.style.maxHeight = `${Math.max(130, Math.min(innerHeight * 0.62, startH - dy))}px`
         }
         const up = () => {
-          e.currentTarget.releasePointerCapture(e.pointerId)
+          try {
+            rail.releasePointerCapture(e.pointerId)
+          } catch {
+            /* already released */
+          }
           removeEventListener('pointermove', move)
           // measure the release first, then let the detent transition animate
           const released = sheet.getBoundingClientRect().height
@@ -87,7 +97,8 @@ function Grab({ full, setFull }: { full: boolean; setFull: (f: boolean) => void 
         addEventListener('pointercancel', up, { once: true })
       }}
       onClick={() => {
-        if (!moved.current) setFull(!full)
+        if (armed.current && !moved.current) setFull(!full)
+        armed.current = false
       }}
     />
   )
