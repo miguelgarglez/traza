@@ -478,6 +478,29 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
   // alternating above/below the line; collisions demote lod.
   const labels: Label[] = []
   const placed: { x0: number; x1: number; y: number }[] = []
+  // slanted track pieces (45° forks/merges) are obstacles too — a name
+  // must not sit under a crossing track
+  const slants: { x0: number; y0: number; y1: number; dir: number }[] = []
+  for (const l of lines)
+    for (const sg of l.segs)
+      for (let i = 1; i < sg.pts.length; i++) {
+        const a = sg.pts[i - 1]!
+        const b = sg.pts[i]!
+        if (Math.abs(b.y - a.y) > 4)
+          slants.push({ x0: a.x, y0: a.y, y1: b.y, dir: (b.x - a.x) / (b.y - a.y) })
+      }
+  const underTrack = (box: { x0: number; x1: number }, ly: number) =>
+    slants.some((s) => {
+      const lo = Math.min(s.y0, s.y1) - 4
+      const hi = Math.max(s.y0, s.y1) + 4
+      // the slant's x at the label's vertical band (baseline −9..+3)
+      for (const yy of [ly - 9, ly - 3, ly + 3]) {
+        if (yy < lo || yy > hi) continue
+        const sx = s.x0 + (yy - s.y0) * s.dir
+        if (sx > box.x0 - 8 && sx < box.x1 + 8) return true
+      }
+      return false
+    })
   const candidates = lines
     .flatMap((l) => l.stations)
     .filter((s) => s.tier !== 'local')
@@ -495,7 +518,15 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
     for (const off of offs) {
       const ly = s.y + off
       const box = { x0: lx - w / 2, x1: lx + w / 2, y: ly }
-      if (!placed.some((b) => Math.abs(b.y - ly) < 13 && !(box.x1 < b.x0 - 3 || box.x0 - 3 > b.x1))) {
+      // works badges are furniture a name must not cover either
+      const badgeHit = works.some(
+        (wk) => Math.abs(wk.y - ly) < 16 && box.x0 < wk.x + 14 && box.x1 > wk.x - 14,
+      )
+      if (
+        !placed.some((b) => Math.abs(b.y - ly) < 13 && !(box.x1 < b.x0 - 3 || box.x0 - 3 > b.x1)) &&
+        !underTrack(box, ly) &&
+        !badgeHit
+      ) {
         placed.push(box)
         labels.push({ x: lx, y: ly, side, text: s.name, lod, stationId: s.id })
         if (lod === 0) lod0++

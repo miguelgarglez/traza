@@ -67,6 +67,7 @@ function Grab({ full, setFull }: { full: boolean; setFull: (f: boolean) => void 
         const startH = sheet.getBoundingClientRect().height
         moved.current = false
         e.currentTarget.setPointerCapture(e.pointerId)
+        sheet.classList.add('dragging') // the sheet follows the finger — no transition
         const move = (ev: PointerEvent) => {
           const dy = ev.clientY - startY
           if (Math.abs(dy) > 4) moved.current = true
@@ -75,11 +76,15 @@ function Grab({ full, setFull }: { full: boolean; setFull: (f: boolean) => void 
         const up = () => {
           e.currentTarget.releasePointerCapture(e.pointerId)
           removeEventListener('pointermove', move)
+          // measure the release first, then let the detent transition animate
+          const released = sheet.getBoundingClientRect().height
           sheet.style.maxHeight = ''
-          if (moved.current) setFull(sheet.getBoundingClientRect().height > innerHeight * 0.42)
+          sheet.classList.remove('dragging')
+          if (moved.current) setFull(released > innerHeight * 0.42)
         }
         addEventListener('pointermove', move)
         addEventListener('pointerup', up, { once: true })
+        addEventListener('pointercancel', up, { once: true })
       }}
       onClick={() => {
         if (!moved.current) setFull(!full)
@@ -149,7 +154,8 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
       <header>
         <span className="stopdot" style={{ borderColor: line.color }} />
         <div>
-          <h2><Red text={s.name} /></h2>
+          {/* the sheet earns the full title — the 26-char map label is only for the plano */}
+          <h2><Red text={st.title?.trim().replace(/^<[^>]+>\s*/, '') || s.name} /></h2>
           <p className="sub">
             stop {s.ord + 1} of {line.stations.length} · {svc}{line.trunk ? '' : ' branch'} · {fmt(st.ts)}
           </p>

@@ -6,6 +6,7 @@ import type { Weave } from './lib/model.ts'
 import { filesFromDrop, filesFromInput, loadDemo } from './lib/files.ts'
 import MapView, { type MapHandle } from './MapView.tsx'
 import Inspector from './Inspector.tsx'
+import { haptic, hapticsOn, setHaptics } from './lib/haptics.ts'
 
 type Status = 'boot' | 'ready' | 'empty' | 'lineclosed'
 
@@ -85,6 +86,9 @@ export default function App() {
     setFollow(v)
   }
 
+  // touch feedback — iOS-capable via web-haptics, user-switchable
+  const [hap, setHap] = useState(hapticsOn())
+
   // first run: platform-sign guide, three learn-by-doing steps
   useEffect(() => {
     if (!net || localStorage.getItem('traza.guide')) return
@@ -110,14 +114,21 @@ export default function App() {
     if (!ix) { setGpos(null); return }
     if (guide === 2) {
       map.current?.flyTo(ix.x, ix.y - 60, 640, 400)
-      setSel(ix.id)
+      // don't setSel here — opening the inspector would hide this very sign
+      // (selopen); the learner opens the branch by clicking it themselves
     }
-    // let the camera settle, then pin the sign above the target
-    const t = setTimeout(() => {
+    // keep the sign pinned to its target while the camera settles and
+    // afterwards — recompute until the step completes
+    const tick = () => {
       const p = map.current?.screenPos(ix.id)
-      setGpos(p ? { x: p.px, y: p.py } : null)
-    }, guide === 2 ? 700 : 60)
-    return () => clearTimeout(t)
+      if (p) setGpos({ x: p.px, y: p.py })
+    }
+    const t = setTimeout(tick, 60)
+    const iv = setInterval(tick, 350)
+    return () => {
+      clearTimeout(t)
+      clearInterval(iv)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guide, net])
 
@@ -248,11 +259,7 @@ export default function App() {
         if (Math.hypot(p.x - sw.x, p.y - sw.y) < 16) {
           switchFired.current.add(key)
           map.current?.switchThrow(sw.x, sw.y)
-          try {
-            navigator.vibrate?.(4)
-          } catch {
-            /* not supported */
-          }
+          haptic('buzz') // points throw — a small mechanical tick
         }
       })
       if (rp.dist >= leg.len) {
@@ -271,11 +278,7 @@ export default function App() {
         })
         map.current?.setTrain(arrived.x, arrived.y, end.angle, true, lineColorOf(net, arrived.lineId))
         if (followRef.current) map.current?.keepInView(arrived.x, arrived.y)
-        try {
-          navigator.vibrate?.(6)
-        } catch {
-          /* not supported */
-        }
+        haptic('nudge') // station detent — the train settles into the stop
         if (rp.leg >= ride.legs.length) {
           setPlaying(false)
           map.current?.terminusGlow(ride.corridorIdx)
@@ -593,6 +596,19 @@ export default function App() {
                 <button onClick={() => dirPick.current?.click()}>open folder</button>
                 <button onClick={() => filePick.current?.click()}>open files</button>
                 <button aria-label="replay the tour" title="replay the tour" onClick={() => setGuide(1)}>?</button>
+                <button
+                  className={hap ? 'haptoggle on' : 'haptoggle'}
+                  aria-pressed={hap}
+                  title={hap ? 'haptics on — taps, detents and the switch-throw tick' : 'haptics off'}
+                  onClick={() => {
+                    const v = !hap
+                    setHap(v)
+                    setHaptics(v)
+                    if (v) haptic('success')
+                  }}
+                >
+                  buzz {hap ? 'on' : 'off'}
+                </button>
                 {demoLoaded ? (
                   <span className="demopill">demo export</span>
                 ) : (
@@ -807,17 +823,29 @@ function FareMeter({ value, reduced }: { value: number; reduced: boolean }) {
 function LedText({ text }: { text: string }) {
   const ref = useRef<HTMLElement>(null)
   const prev = useRef(text)
+  const anim = useRef<Animation | null>(null)
+  // if the user flips reduced-motion mid-flight, the in-flight swap dies too
+  useEffect(() => {
+    const mq = matchMedia('(prefers-reduced-motion: reduce)')
+    const stop = () => {
+      anim.current?.cancel()
+      anim.current = null
+    }
+    mq.addEventListener('change', stop)
+    return () => mq.removeEventListener('change', stop)
+  }, [])
   useEffect(() => {
     if (prev.current === text) return
     prev.current = text
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    ref.current?.animate(
+    anim.current?.cancel()
+    anim.current = ref.current?.animate(
       [
         { opacity: 0.15, transform: 'translateX(12px)' },
         { opacity: 1, transform: 'none' },
       ],
       { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
-    )
+    ) ?? null
   }, [text])
   return <b ref={ref}>{text}</b>
 }

@@ -306,10 +306,13 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       const v = viewRect()
       // a readable neighborhood: ~one screenful at k≈0.9. The service
       // nameboard is content — keep it in frame — while the big headboard
-      // is furniture that lives further left, outside the opening bounds
-      const wSpan = Math.max(360, (v.w - v.right) / 0.95)
+      // is furniture that lives further left, outside the opening bounds.
+      // On phones the key and dock already carry the service title, so the
+      // nameboard is freed too — station glyphs need the pixels more.
+      const mobile = v.w <= 720
+      const wSpan = mobile ? Math.max(320, (v.w - v.right) / 0.9) : Math.max(360, (v.w - v.right) / 0.95)
       const nbLeft = s0.x - P * 1.9 - 30 - trunk.service.length * 5.4
-      const x0 = Math.min(s0.x - P * 2.2, nbLeft - 16)
+      const x0 = mobile ? s0.x - P * 1.2 : Math.min(s0.x - P * 2.2, nbLeft - 16)
       const x1 = Math.min(corridorBounds[0]!.geo.x1 + 30, s0.x + wSpan)
       // vertical extent of everything inside that x-window
       let y0 = c0.trunkY - U * 1.2 // the headboard hangs above the trunk

@@ -249,6 +249,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   font: 600 9.5px var(--cond); letter-spacing: 0.04em;
   background: #fff2d8; color: #8a6a12; border: 1px solid #eeda9f;
 }
+.keyfoot .haptoggle.on { border-color: var(--navy); background: #eef3fb; }
+.stage.night .keyfoot .haptoggle.on { border-color: #5f7394; background: #232f40; }
 .keyfoot button + .demopill { margin-left: auto; }
 .keyfoot .ghostbtn { margin-left: auto; }
 
@@ -491,8 +493,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   content: ''; position: absolute; top: 100%; left: 50%; margin-left: -4px;
   border: 4px solid transparent; border-top-color: var(--ink);
 }
-.led b { animation: ledswap 0.3s var(--ease); }
-@keyframes ledswap { from { opacity: 0; transform: translateX(9px); } to { opacity: 1; transform: none; } }
+/* destination text changes are owned by LedText's WAAPI crossfade — no
+   competing CSS entrance here */
 .ridesub { font: 500 9.5px var(--cond); color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .fare {
   display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
@@ -536,7 +538,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .finder li i { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .finder li b {
   font: 600 12.5px var(--cond); flex: 1; min-width: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; line-height: 1.3;
 }
 .finder li span { font: 500 10.5px var(--cond); color: var(--mute); flex-shrink: 0; }
 .finder li.nohit { font: 500 12px var(--cond); color: var(--mute); cursor: default; padding: 12px 10px; }
@@ -596,7 +599,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 @media (max-width: 720px) {
   .maptools { top: 12px; left: 12px; }
   .maptools button { width: 42px; height: 42px; }
-  .followpill { bottom: 130px; }
+  .followpill { bottom: calc(var(--dockh, 112px) + 14px); }
 
   .key { left: 10px; top: 62px; bottom: auto; width: min(300px, calc(100vw - 20px)); }
   .key.shut { transform: none; }
@@ -607,18 +610,27 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
     max-height: 30vh; border-radius: 14px; padding-top: 5px;
     transition: max-height 0.3s var(--ease);
   }
+  .inspector.dragging { transition: none; }
   .inspector.full { max-height: 62vh; }
 
   .dock {
     left: 10px; right: 10px; bottom: 10px; transform: none;
-    max-width: none; gap: 8px; padding: 8px 10px; flex-wrap: wrap; justify-content: center;
+    max-width: none; gap: 6px; padding: 7px 10px 8px; flex-wrap: wrap; justify-content: center;
   }
   /* fingertip targets — every ride control is at least 34px tall */
   .dock button { min-height: 34px; min-width: 34px; }
   .dock .play { min-width: 46px; min-height: 46px; }
   .dock .speeds button { min-height: 34px; min-width: 34px; }
-  /* two rows: controls up top, the next-stop board takes the full width */
+  /* two rows: transport controls up top, the next-stop board the full
+     width beneath — the redundant counter line steps aside */
   .dock .rideinfo { order: 10; flex-basis: 100%; min-width: 0; max-width: none; }
+  .dock .ridesub { display: none; }
+  /* the scrubber's touch region — thin track, generous band */
+  .dock .rideprog { height: 40px; }
+  .dock .rideprog::before { top: 50%; margin-top: -2px; }
+  .dock .rideprog i { top: 50%; margin-top: -2px; }
+  .dock .progthumb { top: 50%; margin-top: -5.5px; }
+  .dock .progprev { bottom: auto; top: -4px; }
   .dock .fare { display: flex; flex-direction: row; align-items: baseline; gap: 3px; border: 0; padding: 0 2px; min-width: 0; }
   .dock .fare b { font-size: 12px; }
   .speeds { flex-direction: row; }
@@ -626,9 +638,6 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   .finder li { min-height: 44px; }
   @keyframes rise { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 }
-
-/* one thing at a time: the guide sign steps aside while a detail is open */
-.stage.selopen .gsign { visibility: hidden; }
 
 /* ============ night service extends to the chrome ============ */
 .stage.night .key, .stage.night .inspector, .stage.night .finder {
