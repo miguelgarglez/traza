@@ -53,7 +53,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .zone { fill: #ffffff; opacity: 0.34; transition: fill 1.1s var(--ease), opacity 0.25s; }
 .plano.riding .zone { fill: #1b2635; }
 
-.track { fill: none; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; transition: filter 1.1s var(--ease); }
+.track { fill: none; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; transition: filter 1.1s var(--ease), stroke-width 0.3s var(--ease); }
+/* rails bulk up as you approach — the diagram reads as infrastructure */
+.plano[data-z='near'] .track { stroke-width: 8.5; }
+.plano[data-z='far'] .track { stroke-width: 5.5; }
 .track.inferred { stroke-dasharray: 0.014 0.009; }
 .plano.riding .track { filter: drop-shadow(0 0 5px rgba(140, 180, 235, 0.45)); }
 .plano.riding .link, .plano.riding .stub { opacity: 0.35; }
@@ -77,6 +80,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .plano.fresh .lb { animation: lbfade 0.5s var(--ease) 1.4s both; }
 .plano.fresh .nameboard { animation: lbfade 0.5s var(--ease) 1.1s both; }
 .plano.fresh .works { animation: stpop 0.4s var(--ease) 1.6s both; }
+/* the works spur's stub crawls outward from its anchor station — the
+   dashes marching like the offshoot digging itself in */
+.plano.fresh .works .stub { animation: stubmarch 0.9s linear 1.6s; }
+@keyframes stubmarch { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
 .plano.fresh .zone { animation: zonefade 0.8s var(--ease) both; }
 @keyframes lbfade { from { opacity: 0; } to { opacity: 0.95; } }
 @keyframes zonefade { from { opacity: 0; } to { opacity: 0.34; } }
@@ -605,8 +612,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 /* first-run guide — hanging platform signs */
 .gsign {
   position: absolute; z-index: 7; pointer-events: none;
-  animation: signhang 0.55s var(--ease);
 }
+/* the drop animates the board, not the positioned wrapper — transform
+   keeps it on the compositor instead of reflowing on margin */
+.gsign .sign { animation: signhang 0.55s var(--ease); }
 .gsign.g1 { left: 50%; top: 22%; transform: translateX(-50%); }
 .gsign.g2 { left: 50%; top: 18%; transform: translateX(-50%); }
 .gsign.g3 { left: 50%; bottom: 96px; transform: translateX(-50%); }
@@ -637,7 +646,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .sign p { margin: 3px 0 5px; font: 500 12px var(--cond); color: #a9bcd6; }
 .sign button { font: 600 11.5px var(--cond); color: #7f96b8; text-decoration: underline; text-underline-offset: 2px; padding: 4px 8px; }
 .sign button:hover { color: #cfe0f5; }
-@keyframes signhang { from { opacity: 0; margin-top: -10px; } to { opacity: 1; margin-top: 0; } }
+@keyframes signhang { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 .dock .play.nudge { animation: nudge 1.5s var(--ease) infinite; }
 @keyframes nudge { 0%, 100% { box-shadow: 0 3px 8px rgba(15, 78, 158, 0.35); } 50% { box-shadow: 0 0 0 7px rgba(15, 78, 158, 0.28); } }
 @media (prefers-reduced-motion: reduce) { .dock .play.nudge { animation: none; box-shadow: 0 0 0 3px rgba(15, 78, 158, 0.4); } }

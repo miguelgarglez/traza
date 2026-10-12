@@ -217,6 +217,7 @@ export default function App() {
       stop()
     }
     const iv = setInterval(() => {
+      if (document.hidden) return // no idle work on a backgrounded tab
       if (!running && !playing && performance.now() - lastAct.current > 20000) {
         running = true
         last = 0
@@ -785,7 +786,7 @@ export default function App() {
           <button className="skip" aria-label="next stop" onClick={() => rideTo(rideUi.stop)} disabled={rideUi.stop >= rideUi.total}>▶|</button>
           <div className="rideinfo">
             <div className="led">
-              <span>{rideUi.stop >= rideUi.total ? 'terminus' : 'next'}</span>
+              <span>{rideUi.stop >= rideUi.total ? 'all change' : 'next'}</span>
               <LedText text={rideUi.next} />
             </div>
             <RideProg
