@@ -8,7 +8,7 @@ ride the line and watch the session replay like a night service.
 
 ![traza](docs/hero.png)
 
-**[traza.vercel.app](https://traza.vercel.app)** — live, free, no account.
+**[traza-sand.vercel.app](https://traza-sand.vercel.app)** — live, free, no account.
 Everything happens in the browser; nothing leaves your machine.
 
 ## What it does
