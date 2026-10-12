@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Corridor, Line, Network, Station } from './lib/metro.ts'
 import type { Step } from './lib/model.ts'
 import { redactText } from './lib/redact.ts'
+import { haptic } from './lib/haptics.ts'
 
 interface Props {
   net: Network
@@ -55,11 +56,11 @@ function CallRow({ c }: { c: NonNullable<Step['calls']>[number] }) {
 }
 
 /** mobile sheet rail — drag it up to expand, down to tuck, tap to toggle */
-function Grab({ full, setFull }: { full: boolean; setFull: (f: boolean) => void }) {
+function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) => void; onSnap?: (f: boolean) => void }) {
   const moved = useRef(false)
-  // a station tap can retarget the click to the freshly-mounted rail when
+  // a station tap can retarget its click to the freshly-mounted rail when
   // the sheet opens under the finger — only a press that began on the
-  // rail itself is allowed to toggle
+  // rail itself (or a keyboard activation, detail === 0) may toggle
   const armed = useRef(false)
   return (
     <button
@@ -79,25 +80,53 @@ function Grab({ full, setFull }: { full: boolean; setFull: (f: boolean) => void 
           if (Math.abs(dy) > 4) moved.current = true
           sheet.style.maxHeight = `${Math.max(130, Math.min(innerHeight * 0.62, startH - dy))}px`
         }
+        // one cleanup owns the whole gesture — whichever release arrives first
+        const done = () => {
+          removeEventListener('pointermove', move)
+          removeEventListener('pointerup', done)
+          removeEventListener('pointercancel', cancel)
+        }
         const up = () => {
+          done()
           try {
             rail.releasePointerCapture(e.pointerId)
           } catch {
             /* already released */
           }
-          removeEventListener('pointermove', move)
           // measure the release first, then let the detent transition animate
           const released = sheet.getBoundingClientRect().height
           sheet.style.maxHeight = ''
           sheet.classList.remove('dragging')
-          if (moved.current) setFull(released > innerHeight * 0.42)
+          if (moved.current) {
+            const next = released > innerHeight * 0.42
+            setFull(next)
+            if (next !== full) onSnap?.(next)
+          }
+          // the gesture's click dispatches synchronously after pointerup —
+          // keep moved through it so a drag never toggles, then release
+          setTimeout(() => (moved.current = false), 0)
+        }
+        const cancel = () => {
+          done()
+          try {
+            rail.releasePointerCapture(e.pointerId)
+          } catch {
+            /* already released */
+          }
+          sheet.style.maxHeight = ''
+          sheet.classList.remove('dragging')
+          armed.current = false
+          setTimeout(() => (moved.current = false), 0)
         }
         addEventListener('pointermove', move)
-        addEventListener('pointerup', up, { once: true })
-        addEventListener('pointercancel', up, { once: true })
+        addEventListener('pointerup', up)
+        addEventListener('pointercancel', cancel)
       }}
-      onClick={() => {
-        if (armed.current && !moved.current) setFull(!full)
+      onClick={(e) => {
+        // e.detail === 0 → keyboard/assistive activation, always allowed
+        if ((!armed.current && e.detail !== 0) || moved.current) return
+        setFull(!full)
+        onSnap?.(!full)
         armed.current = false
       }}
     />
@@ -127,13 +156,23 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
   // mobile: tap the grab rail to swap compact ↔ expanded sheet heights
   const [full, setFull] = useState(false)
   const hit = sel ? find(net, sel) : null
+  // a newly-opened sheet always starts compact — a previous session's
+  // expanded detent must not leak into the next inspection
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (!hit) wasOpen.current = false
+    else if (!wasOpen.current) {
+      wasOpen.current = true
+      setFull(false)
+    }
+  }, [hit])
   if (!hit) return null
 
   if (hit.kind === 'works') {
     const w = hit.w
     return (
       <aside className={`inspector${full ? ' full' : ''}`} aria-label="closed works detail">
-        <Grab full={full} setFull={setFull} />
+        <Grab full={full} setFull={setFull} onSnap={() => haptic('nudge')} />
         <header>
           <span className="wbox-lg">{w.count > 9 ? '9+' : w.count}</span>
           <div>
@@ -161,7 +200,7 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
 
   return (
     <aside className={`inspector${full ? ' full' : ''}`} aria-label="station detail">
-      <Grab full={full} setFull={setFull} />
+      <Grab full={full} setFull={setFull} onSnap={() => haptic('nudge')} />
       <header>
         <span className="stopdot" style={{ borderColor: line.color }} />
         <div>
@@ -211,7 +250,8 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
           <p><Red text={st.thinking} /></p>
         </details>
       )}
-      {st.body && (
+      {/* a body that just repeats the title is noise — tool evidence earns the space instead */}
+      {st.body && st.body.trim() !== (st.title?.trim().replace(/^<[^>]+>\s*/, '') ?? '') && (
         <div className="body"><p><Red text={st.body.slice(0, 4000)} />{st.body.length > 4000 && ' …'}</p></div>
       )}
       {st.calls?.map((c) => <CallRow key={c.id} c={c} />)}

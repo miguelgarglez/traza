@@ -46,18 +46,6 @@ export default function App() {
   const dockRef = useRef<HTMLElement>(null)
   const mainRef = useRef<HTMLElement>(null)
 
-  // the mobile inspector sheet rests on the dock — measure it honestly
-  // instead of guessing a fixed offset that wraps break
-  useEffect(() => {
-    const measure = () => {
-      const h = dockRef.current?.getBoundingClientRect().height ?? 0
-      mainRef.current?.style.setProperty('--dockh', `${h}px`)
-    }
-    measure()
-    addEventListener('resize', measure)
-    return () => removeEventListener('resize', measure)
-  })
-
   const ride: Ride | null = useMemo(
     () => (net && net.corridors.length ? buildRide(net, Math.min(svcIdx, net.corridors.length - 1)) : null),
     [net, svcIdx],
@@ -73,6 +61,25 @@ export default function App() {
       return acc
     })
   }, [ride])
+
+  // the mobile inspector sheet rests on the dock — observe it directly so
+  // wraps, font or content changes can never strand the sheet underneath
+  useEffect(() => {
+    const el = dockRef.current
+    const host = mainRef.current
+    if (!el || !host) return
+    const measure = () => {
+      host.style.setProperty('--dockh', `${el.getBoundingClientRect().height}px`)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      removeEventListener('resize', measure)
+    }
+  }, [!!ride])
 
   const [solo, setSolo] = useState<number | null>(null)
   const [finder, setFinder] = useState(false)
@@ -117,18 +124,17 @@ export default function App() {
       // don't setSel here — opening the inspector would hide this very sign
       // (selopen); the learner opens the branch by clicking it themselves
     }
-    // keep the sign pinned to its target while the camera settles and
-    // afterwards — recompute until the step completes
+    // keep the sign pinned to its target — tracked on animation frames so
+    // the camera flight and the sign move together, no stepped pursuit
     const tick = () => {
       const p = map.current?.screenPos(ix.id)
-      if (p) setGpos({ x: p.px, y: p.py })
+      if (p) setGpos((prev) => (prev && Math.abs(prev.x - p.px) < 0.5 && Math.abs(prev.y - p.py) < 0.5 ? prev : { x: p.px, y: p.py }))
     }
-    const t = setTimeout(tick, 60)
-    const iv = setInterval(tick, 350)
-    return () => {
-      clearTimeout(t)
-      clearInterval(iv)
-    }
+    let raf = requestAnimationFrame(function loop() {
+      tick()
+      raf = requestAnimationFrame(loop)
+    })
+    return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guide, net])
 
@@ -514,6 +520,18 @@ export default function App() {
       {/* map tools — visible affordances for what the keys also do */}
       {net && (
         <div className="maptools">
+          <span className="brand" aria-hidden>traza</span>
+          <button
+            className="openbtn"
+            aria-label="open your export"
+            title="open your exported agent sessions"
+            onClick={() => filePick.current?.click()}
+          >
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+              <path d="M8 11V2M5 5l3-3 3 3M2.5 11v2.5h11V11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>open</span>
+          </button>
           <button aria-label="find a station ( / )" title="find a station" onClick={() => setFinder(true)}>
             <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
               <circle cx="7" cy="7" r="4.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
@@ -680,6 +698,14 @@ export default function App() {
               </button>
             ))}
           </div>
+          {/* phones: one control cycles the rate instead of a second row */}
+          <button
+            className="speedcycle"
+            aria-label={`ride speed ${speed}× — tap to change`}
+            onClick={() => setSpeed((s) => (s === 1 ? 2 : s === 2 ? 4 : 1))}
+          >
+            {speed}×
+          </button>
         </section>
       )}
 
@@ -719,10 +745,13 @@ export default function App() {
               {guide === 1
                 ? 'drag the plano to look around'
                 : guide === 2
-                  ? 'click the pinned interchange to meet the sidekick'
+                  ? 'click the interchange ring to meet the sidekick'
                   : 'press play — the train re-runs the session through the night'}
             </p>
-            <button onClick={guideDone}>skip the tour</button>
+            <div className="gsteps">
+              <span>step {guide} of 3</span>
+              <button onClick={guideDone}>skip the tour</button>
+            </div>
           </div>
         </div>
       )}
