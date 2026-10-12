@@ -474,7 +474,8 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
     }
   }
 
-  // 4. Labels: majors get 45° labels, alternating side; collision demotes lod.
+  // 4. Labels: majors get horizontal labels centered on the station,
+  // alternating above/below the line; collisions demote lod.
   const labels: Label[] = []
   const placed: { x0: number; x1: number; y: number }[] = []
   const candidates = lines
@@ -484,19 +485,22 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
   let lod0 = 0
   for (const s of candidates) {
     const side: 1 | -1 = s.ord % 2 === 0 ? -1 : 1
-    const w = s.name.length * 4.6 + 10
-    // Beck labels: above-the-line text runs up-right (anchor start, offset
-    // just right of the glyph); below-the-line runs down-left (anchor end).
-    const lx = s.x + (side < 0 ? 9 : -9)
-    const ly = s.y + side * 11
-    const box = side < 0 ? { x0: lx, x1: lx + w, y: ly } : { x0: lx - w, x1: lx, y: ly }
+    const w = s.name.length * 5.1 + 12
+    const lx = s.x
+    // two tiers per side, like a real map stacking labels when space is tight;
+    // a name that finds no clean slot is dropped — the dot, hover name and
+    // inspector still carry it
+    const offs = side < 0 ? [-14, -34] : [22, 42]
     let lod = s.tier === 'local' ? 2 : 0
-    const clash = placed.some((b) => Math.abs(b.y - ly) < 12 && !(box.x1 < b.x0 || box.x0 > b.x1))
-    if (clash) lod++
-    if (lod === 0) lod0++
-    if (lod <= 2) {
-      placed.push(box)
-      labels.push({ x: lx, y: ly, side, text: s.name, lod, stationId: s.id })
+    for (const off of offs) {
+      const ly = s.y + off
+      const box = { x0: lx - w / 2, x1: lx + w / 2, y: ly }
+      if (!placed.some((b) => Math.abs(b.y - ly) < 13 && !(box.x1 < b.x0 - 3 || box.x0 - 3 > b.x1))) {
+        placed.push(box)
+        labels.push({ x: lx, y: ly, side, text: s.name, lod, stationId: s.id })
+        if (lod === 0) lod0++
+        break
+      }
     }
   }
   // guarantee a few lod-0 names even on dense maps: upgrade the first majors

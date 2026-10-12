@@ -176,9 +176,12 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); z-index: 6;
   padding: 7px 16px; border-radius: 20px;
   background: rgba(28, 39, 51, 0.9); color: #ffd97a;
+  border: 1px solid rgba(255, 217, 122, 0.4);
   font: 600 11px var(--cond); letter-spacing: 0.03em;
-  box-shadow: var(--shadow); animation: rise 0.3s var(--ease);
+  box-shadow: 0 4px 16px rgba(8, 14, 22, 0.35), 0 0 0 4px rgba(237, 240, 245, 0.55);
+  animation: rise 0.3s var(--ease);
 }
+@keyframes rise { from { transform: translate(-50%, 10px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 .followpill:hover { background: var(--ink); }
 
 /* key panel */
@@ -348,18 +351,6 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .wsteps li b { font: 600 9.5px var(--cond); text-transform: uppercase; color: var(--mute); margin-right: 4px; }
 .wsteps .more { color: var(--faint); }
 
-/* hint pill */
-.hint {
-  position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%);
-  padding: 8px 16px; border-radius: 20px;
-  background: rgba(28, 39, 51, 0.88); color: #fff;
-  font: 500 11px var(--cond); box-shadow: var(--shadow);
-  animation: rise 0.4s var(--ease);
-  white-space: nowrap; z-index: 4;
-}
-.hint b { font: 700 10px var(--xcond); letter-spacing: 0.1em; text-transform: uppercase; margin-right: 8px; color: #9db8dd; }
-@keyframes rise { from { transform: translate(-50%, 12px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
-
 /* veils and plaques */
 .veil, .dropveil {
   position: absolute; inset: 0; display: grid; place-items: center; z-index: 8;
@@ -421,14 +412,14 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .plano .st > * { transition: filter 0.5s; }
 .plano.riding .st.lit > * { filter: drop-shadow(0 0 5px rgba(255, 240, 190, 0.9)); }
 .plano.riding .st.lit .stname { opacity: 0.95; }
-/* terminus reveal — the ridden route flares awake down its length */
-.plano.arrived .track { animation: arriveglow 1.5s var(--ease); }
+/* terminus reveal — only the corridor that was ridden flares awake */
+.plano .arr .track { animation: arriveglow 1.5s var(--ease); }
 @keyframes arriveglow {
   0% { filter: drop-shadow(0 0 3px rgba(255, 220, 130, 0)); }
   30% { filter: drop-shadow(0 0 11px rgba(255, 220, 130, 0.85)); }
   100% { filter: drop-shadow(0 0 3px rgba(255, 220, 130, 0)); }
 }
-.plano.arrived .st { animation: arrivepop 0.5s var(--ease) both; animation-delay: var(--d, 0ms); }
+.plano .arr .st { animation: arrivepop 0.5s var(--ease) both; animation-delay: var(--d, 0ms); }
 @keyframes arrivepop {
   0% { transform: scale(1); } 45% { transform: scale(1.45); } 100% { transform: scale(1); }
 }
@@ -519,7 +510,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 /* "where to?" finder */
 .finderwrap {
   position: absolute; inset: 0; z-index: 9; display: flex; justify-content: center;
-  padding-top: 12vh; background: rgba(237, 240, 245, 0.5); backdrop-filter: blur(2px);
+  padding-top: 12vh; background: rgba(237, 240, 245, 0.42); backdrop-filter: blur(1.2px);
 }
 .finder {
   width: min(460px, calc(100vw - 32px)); height: fit-content;
@@ -590,8 +581,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 @media (max-width: 720px) {
   .inspector .grab {
     display: block; position: sticky; top: 0; z-index: 2;
-    width: 100%; height: 22px; margin: -14px 0 4px; padding: 0;
-    background: var(--paper); border-radius: 14px 14px 0 0;
+    width: calc(100% + 28px); height: 22px; margin: 0 -14px 4px; padding: 0;
+    background: var(--paper); border-radius: 14px 14px 0 0; touch-action: none;
   }
   .inspector .grab::after {
     content: ''; position: absolute; left: 50%; top: 7px; margin-left: -18px;
@@ -612,12 +603,11 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   .keybody { max-height: 34vh; }
 
   .inspector {
-    top: auto; left: 10px; right: 10px; bottom: 122px; width: auto;
-    max-height: 30vh; border-radius: 14px;
+    top: auto; left: 10px; right: 10px; bottom: calc(var(--dockh, 112px) + 10px); width: auto;
+    max-height: 30vh; border-radius: 14px; padding-top: 5px;
     transition: max-height 0.3s var(--ease);
   }
   .inspector.full { max-height: 62vh; }
-  .hint { bottom: auto; top: 62px; font-size: 10px; max-width: calc(100vw - 32px); white-space: normal; text-align: center; }
 
   .dock {
     left: 10px; right: 10px; bottom: 10px; transform: none;
@@ -626,7 +616,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   /* fingertip targets — every ride control is at least 34px tall */
   .dock button { min-height: 34px; min-width: 34px; }
   .dock .play { min-width: 46px; min-height: 46px; }
-  .dock .speeds button { min-height: 26px; min-width: 30px; }
+  .dock .speeds button { min-height: 34px; min-width: 34px; }
   /* two rows: controls up top, the next-stop board takes the full width */
   .dock .rideinfo { order: 10; flex-basis: 100%; min-width: 0; max-width: none; }
   .dock .fare { display: flex; flex-direction: row; align-items: baseline; gap: 3px; border: 0; padding: 0 2px; min-width: 0; }
@@ -662,7 +652,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .stage.night .wsteps li { color: #a7b6c9; }
 .stage.night .inspector .x:hover { background: #1e2937; color: #e8eef7; }
 .stage.night .inspector footer { background: #131a25; }
-.stage.night .inspector footer button { border-color: #34415476; color: #9db0c6; }
+.stage.night .inspector footer button { background: #1a2331; border-color: #34415476; color: #9db0c6; }
 .stage.night .inspector footer button:hover:not(:disabled) { background: #1e2937; }
 .stage.night .redflag { background: #40262b; color: #ff9aa2; }
 .stage.night .mono { color: #9fb3cc; }
@@ -713,11 +703,19 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 
 /* one reduced-motion policy, applied to every effect */
 @media (prefers-reduced-motion: reduce) {
-  .hint, .gsign, .finder, .dock, .key, .pin, .followpill, .inspector,
-  .led b, .gsign .sign, .maptools button { animation: none !important; }
-  .plano.arrived .track, .plano.arrived .st { animation: none; }
+  .gsign, .finder, .dock, .key, .pin, .followpill, .inspector,
+  .gsign .sign, .maptools button, .pulse { animation: none !important; }
+  .plano .arr .track, .plano .arr .st { animation: none; }
   .plano.fresh .track, .plano.fresh .st, .plano.fresh .lb,
   .plano.fresh .nameboard, .plano.fresh .works, .plano.fresh .zone { animation: none; }
-  .rideprog i, .progthumb, .zone, .track { transition-duration: 0.01s; }
+  /* the points-throw flash and hover scale are motion too */
+  .ptswitch.live, .ptswitch.live .swtri { animation: none; }
+  .ptswitch.live { opacity: 0; }
+  .train .beam, .train .pool, .train .head,
+  .plano .st > *, .rideprog i, .progthumb, .zone, .track { transition: none; }
   .inspector { transition: none; }
+  .dock .play.nudge { animation: none; box-shadow: 0 0 0 3px rgba(15, 78, 158, 0.4); }
+}
+@media (prefers-reduced-motion: reduce) and (hover: hover) and (pointer: fine) {
+  .st:hover > *:not(.hit) { transform: none; }
 }

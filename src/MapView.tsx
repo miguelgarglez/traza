@@ -12,10 +12,12 @@ export interface MapHandle {
   keepInView: (x: number, y: number) => void
   /** flash the points-throw glyph at a junction the train is crossing */
   switchThrow: (x: number, y: number) => void
-  /** terminus reveal — the ridden line flares awake for a beat */
-  terminusGlow: () => void
+  /** terminus reveal — the ridden corridor flares awake for a beat */
+  terminusGlow: (corridorIdx: number) => void
   /** the idle ghost service — a dim train drifting the trunk */
   setGhost: (x: number, y: number, angle: number, visible: boolean, color?: string) => void
+  /** screen px of a station, for anchoring DOM chrome to the plano */
+  screenPos: (stationId: string) => { px: number; py: number } | null
 }
 
 interface Props {
@@ -83,8 +85,22 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }
   const drag = useRef<{ px: number; py: number; cx: number; cy: number; moved: boolean; panning?: boolean } | null>(null)
   const pinch = useRef<{ d: number; k: number } | null>(null)
+  const lastKiv = useRef(0)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
-  const reduced = useMemo(() => matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  const [reduced, setReduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
+  useEffect(() => {
+    const mq = matchMedia('(prefers-reduced-motion: reduce)')
+    const f = () => setReduced(mq.matches)
+    mq.addEventListener('change', f)
+    return () => mq.removeEventListener('change', f)
+  }, [])
+  useEffect(() => {
+    // live preference flip: cancel anything still in the air
+    if (reduced && flight.current != null) {
+      cancelAnimationFrame(flight.current)
+      flight.current = null
+    }
+  }, [reduced])
   const gestureRef = useRef(onUserGesture)
   gestureRef.current = onUserGesture
 
@@ -140,6 +156,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   const fitTo = (x0: number, y0: number, x1: number, y1: number, animate = false) => {
     const svg = svgRef.current
     if (!svg) return
+    // a new fit supersedes any flight still in the air
+    if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
     const v = viewRect()
     const aw = Math.max(1, v.w - v.right)
     const ah = Math.max(1, v.h - v.bottom)
@@ -174,7 +192,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }
 
   useImperativeHandle(ref, () => ({
-    fit: () => fitTo(net.bounds.x0, net.bounds.y0, net.bounds.x1, net.bounds.y1, false),
+    fit: () => fitTo(net.bounds.x0, net.bounds.y0, net.bounds.x1, net.bounds.y1, true),
     flyTo: (x, y, w = 1400, h = 700) => fitTo(x - w / 2, y - h / 2, x + w / 2, y + h / 2, true),
     zoomBy: (f) => {
       const svg = svgRef.current
@@ -223,9 +241,16 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       if (py < my) ty = my - py
       else if (py > ah - my) ty = ah - my - py
       if (tx || ty) {
-        cam.current.x += tx * 0.12 // eased follow — never snaps
-        cam.current.y += ty * 0.12
+        // time-based easing — same feel at any refresh rate, never snaps
+        const now = performance.now()
+        const dt = Math.min(50, now - (lastKiv.current || now - 16))
+        lastKiv.current = now
+        const f = 1 - Math.exp(-dt / 110)
+        cam.current.x += tx * f
+        cam.current.y += ty * f
         apply()
+      } else {
+        lastKiv.current = 0
       }
     },
     switchThrow: (wx, wy) => {
@@ -236,13 +261,14 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       void g.getBoundingClientRect() // restart the animation
       g.classList.add('live')
     },
-    terminusGlow: () => {
+    terminusGlow: (ci) => {
       const svg = svgRef.current
       if (!svg) return
-      svg.classList.remove('arrived')
-      void svg.getBoundingClientRect()
-      svg.classList.add('arrived')
-      setTimeout(() => svg.classList.remove('arrived'), 2600)
+      // celebrate the corridor that was ridden — not the whole map
+      svg.querySelectorAll('.arr').forEach((el) => el.classList.remove('arr'))
+      const groups = svg.querySelectorAll(`[data-ci="${ci}"]`)
+      groups.forEach((el) => el.classList.add('arr'))
+      setTimeout(() => groups.forEach((el) => el.classList.remove('arr')), 2600)
     },
     setGhost: (wx, wy, angle, visible, color) => {
       const g = ghostRef.current
@@ -250,6 +276,11 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       g.setAttribute('transform', `translate(${wx} ${wy}) rotate(${angle})`)
       g.style.display = visible ? '' : 'none'
       if (color) g.style.setProperty('--train', color)
+    },
+    screenPos: (sid) => {
+      const s = stationIndex.get(sid)
+      if (!s) return null
+      return toScreen(s.x, s.y)
     },
   }))
 
@@ -263,7 +294,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
 
   // initial fit once the net changes; the plano "lays track" for a moment.
   // Open on a readable neighborhood of the first service — a screenful of
-  // trunk at k≈1, headboard included — not the whole service shrunk thin.
+  // trunk at k≈1 — not the whole service shrunk thin.
   // The whole network is a zoom-out away ('f' / the fit button).
   useEffect(() => {
     const c0 = net.corridors[0]
@@ -273,12 +304,15 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       fitTo(net.bounds.x0, net.bounds.y0, net.bounds.x1, net.bounds.y1, false)
     } else {
       const v = viewRect()
-      const hbX = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 252
-      const wSpan = Math.max(460, (v.w - v.right) / 0.85)
-      const x0 = Math.min(hbX, s0.x - P * 2.2)
+      // a readable neighborhood: ~one screenful at k≈0.9. The service
+      // nameboard is content — keep it in frame — while the big headboard
+      // is furniture that lives further left, outside the opening bounds
+      const wSpan = Math.max(360, (v.w - v.right) / 0.95)
+      const nbLeft = s0.x - P * 1.9 - 30 - trunk.service.length * 5.4
+      const x0 = Math.min(s0.x - P * 2.2, nbLeft - 16)
       const x1 = Math.min(corridorBounds[0]!.geo.x1 + 30, s0.x + wSpan)
       // vertical extent of everything inside that x-window
-      let y0 = c0.trunkY - U * 1.05 // the headboard hangs above the nameboard
+      let y0 = c0.trunkY - U * 1.2 // the headboard hangs above the trunk
       let y1 = c0.trunkY + U * 0.8
       for (const l of c0.lines) {
         for (const s of l.stations)
@@ -300,7 +334,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     const svg = svgRef.current
     if (!svg) return
     let panIdle: ReturnType<typeof setTimeout> | undefined
-    const onWheel = (e: WheelEvent) => {
+    const onWheel = (ev: Event) => {
+      const e = ev as WheelEvent
       e.preventDefault()
       // a gesture always wins over a camera flight and suspends ride-follow
       if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
@@ -314,8 +349,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.006 : 0.0022))
       zoomAt(e.clientX - r.left, e.clientY - r.top, f)
     }
-    svg.addEventListener('wheel', onWheel, { passive: false })
-    return () => svg.removeEventListener('wheel', onWheel)
+    // the listener lives on the wrap, not the svg — the svg element is CSS-
+    // translated by the camera, so its border box slides out from under the
+    // pointer and gestures would fall through
+    const wrap = svg.parentElement ?? svg
+    wrap.addEventListener('wheel', onWheel, { passive: false })
+    return () => wrap.removeEventListener('wheel', onWheel)
   }, [])
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -337,6 +376,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     if (pinch.current && pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()] as [{ x: number; y: number }, { x: number; y: number }]
       const nd = Math.hypot(a.x - b.x, a.y - b.y)
+      onUserGesture?.()
+      if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
+      svgRef.current!.dataset.pan = '1'
       const r = (svgRef.current!.parentElement ?? svgRef.current!).getBoundingClientRect()
       const mx = (a.x + b.x) / 2 - r.left
       const my = (a.y + b.y) / 2 - r.top
@@ -375,9 +417,22 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     drag.current = null
     if (!pointers.current.size && svgRef.current) delete svgRef.current.dataset.pan
     if (dg && !dg.moved) {
-      const t = e.target as Element
-      const sid = t.getAttribute?.('data-sid')
-      const wid = t.getAttribute?.('data-wid')
+      // pick the nearest station or works badge to the tap point — at zoomed-
+      // out scales hit circles overlap, so closeness, not DOM order, decides
+      const r = (svgRef.current!.parentElement ?? svgRef.current!).getBoundingClientRect()
+      const { k } = cam.current
+      const { wx, wy } = toWorld(e.clientX - r.left, e.clientY - r.top)
+      let sid: string | null = null
+      let wid: string | null = null
+      let best = 16 // screen px pick radius
+      for (const s of stationIndex.values()) {
+        const dd = Math.hypot((s.x - wx) * k, (s.y - wy) * k)
+        if (dd < best) { best = dd; sid = s.id; wid = null }
+      }
+      for (const w of worksIndex.values()) {
+        const dd = Math.hypot((w.x - wx) * k, (w.y - wy) * k)
+        if (dd < best + 4) { best = dd; sid = null; wid = w.id }
+      }
       if (sid) onPick(sel === sid ? null : sid)
       else if (wid) {
         const w = worksIndex.get(wid)
@@ -442,18 +497,20 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   const fade = { transition: 'opacity .25s' } as const
 
   return (
-    <div className="mapwrap">
+    <div
+      className="mapwrap"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onPointerOver={onOver}
+      onPointerLeave={() => setHover(null)}
+    >
       <svg
         ref={svgRef}
         className={`plano${riding ? ' riding' : ''}${fresh ? ' fresh' : ''}`}
         role="application"
         aria-label="metro map of agent sessions — drag to pan, scroll to zoom, click a station"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onPointerOver={onOver}
-        onPointerLeave={() => setHover(null)}
       >
         <defs>
           <linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0">
@@ -598,8 +655,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
                 className={`lb lb${lb.lod}`}
                 x={lb.x}
                 y={lb.y}
-                textAnchor={lb.side < 0 ? 'start' : 'end'}
-                transform={`rotate(-35 ${lb.x} ${lb.y})`}
+                textAnchor="middle"
               >
                 {lb.text}
               </text>
@@ -612,8 +668,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             const trunk = c0?.lines.find((l) => l.trunk)
             const s0 = trunk?.stations[0]
             if (!trunk || !s0) return null
-            const bx = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 252
-            const by = c0!.trunkY - U * 0.95
+            const bx = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 262
+            const by = c0!.trunkY - U * 1.05
             return (
               <g className="headboard" data-ci={0} style={{ ...fade, opacity: dim(0) }} transform={`translate(${bx} ${by})`}>
                 <line x1={30} y1={-30} x2={30} y2={0} />

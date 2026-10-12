@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { Corridor, Line, Network, Station } from './lib/metro.ts'
 import type { Step } from './lib/model.ts'
 import { redactText } from './lib/redact.ts'
@@ -54,6 +54,40 @@ function CallRow({ c }: { c: NonNullable<Step['calls']>[number] }) {
   )
 }
 
+/** mobile sheet rail — drag it up to expand, down to tuck, tap to toggle */
+function Grab({ full, setFull }: { full: boolean; setFull: (f: boolean) => void }) {
+  const moved = useRef(false)
+  return (
+    <button
+      className="grab"
+      aria-label={full ? 'shrink details — or drag down' : 'expand details — or drag up'}
+      onPointerDown={(e) => {
+        const sheet = e.currentTarget.parentElement as HTMLElement
+        const startY = e.clientY
+        const startH = sheet.getBoundingClientRect().height
+        moved.current = false
+        e.currentTarget.setPointerCapture(e.pointerId)
+        const move = (ev: PointerEvent) => {
+          const dy = ev.clientY - startY
+          if (Math.abs(dy) > 4) moved.current = true
+          sheet.style.maxHeight = `${Math.max(130, Math.min(innerHeight * 0.62, startH - dy))}px`
+        }
+        const up = () => {
+          e.currentTarget.releasePointerCapture(e.pointerId)
+          removeEventListener('pointermove', move)
+          sheet.style.maxHeight = ''
+          if (moved.current) setFull(sheet.getBoundingClientRect().height > innerHeight * 0.42)
+        }
+        addEventListener('pointermove', move)
+        addEventListener('pointerup', up, { once: true })
+      }}
+      onClick={() => {
+        if (!moved.current) setFull(!full)
+      }}
+    />
+  )
+}
+
 function find(net: Network, sel: string) {
   for (const c of net.corridors) {
     for (const l of c.lines) {
@@ -83,7 +117,7 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
     const w = hit.w
     return (
       <aside className={`inspector${full ? ' full' : ''}`} aria-label="closed works detail">
-        <button className="grab" onClick={() => setFull((f) => !f)} aria-label={full ? 'shrink details' : 'expand details'} />
+        <Grab full={full} setFull={setFull} />
         <header>
           <span className="wbox-lg">{w.count > 9 ? '9+' : w.count}</span>
           <div>
@@ -111,7 +145,7 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
 
   return (
     <aside className={`inspector${full ? ' full' : ''}`} aria-label="station detail">
-      <button className="grab" onClick={() => setFull((f) => !f)} aria-label={full ? 'shrink details' : 'expand details'} />
+      <Grab full={full} setFull={setFull} />
       <header>
         <span className="stopdot" style={{ borderColor: line.color }} />
         <div>

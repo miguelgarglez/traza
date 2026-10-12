@@ -9,6 +9,17 @@ import Inspector from './Inspector.tsx'
 
 type Status = 'boot' | 'ready' | 'empty' | 'lineclosed'
 
+function useReducedMotion() {
+  const [r, setR] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches)
+  useEffect(() => {
+    const mq = matchMedia('(prefers-reduced-motion: reduce)')
+    const f = () => setR(mq.matches)
+    mq.addEventListener('change', f)
+    return () => mq.removeEventListener('change', f)
+  }, [])
+  return r
+}
+
 export default function App() {
   const [weave, setWeave] = useState<Weave | null>(null)
   const [files, setFiles] = useState<DroppedFile[]>([])
@@ -17,7 +28,6 @@ export default function App() {
   const [sel, setSel] = useState<string | null>(null)
   const [keyOpen, setKeyOpen] = useState(() => typeof innerWidth === 'undefined' || innerWidth > 720)
   const [srcOpen, setSrcOpen] = useState(false)
-  const [hint, setHint] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const map = useRef<MapHandle>(null)
   const filePick = useRef<HTMLInputElement>(null)
@@ -31,7 +41,21 @@ export default function App() {
   const [speed, setSpeed] = useState(1)
   const [rideUi, setRideUi] = useState<{ stop: number; total: number; name: string; next: string } | null>(null)
   const rideRef = useRef<{ leg: number; dist: number; dwell: number }>({ leg: 0, dist: 0, dwell: 0 })
-  const reduced = useMemo(() => matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  const reduced = useReducedMotion()
+  const dockRef = useRef<HTMLElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
+
+  // the mobile inspector sheet rests on the dock — measure it honestly
+  // instead of guessing a fixed offset that wraps break
+  useEffect(() => {
+    const measure = () => {
+      const h = dockRef.current?.getBoundingClientRect().height ?? 0
+      mainRef.current?.style.setProperty('--dockh', `${h}px`)
+    }
+    measure()
+    addEventListener('resize', measure)
+    return () => removeEventListener('resize', measure)
+  })
 
   const ride: Ride | null = useMemo(
     () => (net && net.corridors.length ? buildRide(net, Math.min(svcIdx, net.corridors.length - 1)) : null),
@@ -68,14 +92,33 @@ export default function App() {
     return () => clearTimeout(t)
   }, [net])
 
+  // each guide step anchors to the real thing it teaches — a station's
+  // screen position, or the play button's rect for the ride step
+  const [gpos, setGpos] = useState<{ x: number; y: number } | null>(null)
   useEffect(() => {
-    if (guide !== 2 || !net) return
-    // fly to the first interchange of the first corridor
-    const ix = net.corridors[0]?.lines.flatMap((l) => l.stations).find((s) => s.tier === 'interchange')
-    if (ix) {
+    if (!guide || !net) { setGpos(null); return }
+    if (guide === 3) {
+      const r = document.querySelector('.dock .play')?.getBoundingClientRect()
+      setGpos(r ? { x: r.left + r.width / 2, y: r.top } : null)
+      return
+    }
+    const ix =
+      guide === 2
+        ? net.corridors[0]?.lines.flatMap((l) => l.stations).find((s) => s.tier === 'interchange')
+        : net.corridors[0]?.lines.find((l) => l.trunk)?.stations.find((s) => s.tier !== 'local') ??
+          net.corridors[0]?.lines.find((l) => l.trunk)?.stations[0]
+    if (!ix) { setGpos(null); return }
+    if (guide === 2) {
       map.current?.flyTo(ix.x, ix.y - 60, 640, 400)
       setSel(ix.id)
     }
+    // let the camera settle, then pin the sign above the target
+    const t = setTimeout(() => {
+      const p = map.current?.screenPos(ix.id)
+      setGpos(p ? { x: p.px, y: p.py } : null)
+    }, guide === 2 ? 700 : 60)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guide, net])
 
   const guideDone = () => {
@@ -235,7 +278,7 @@ export default function App() {
         }
         if (rp.leg >= ride.legs.length) {
           setPlaying(false)
-          map.current?.terminusGlow()
+          map.current?.terminusGlow(ride.corridorIdx)
           setRideUi({
             stop: ride.stops.length,
             total: ride.stops.length,
@@ -312,22 +355,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => {
-    try {
-      setHint(!localStorage.getItem('traza-seen'))
-    } catch {
-      setHint(true)
-    }
-  }, [])
-  const seen = () => {
-    setHint(false)
-    try {
-      localStorage.setItem('traza-seen', '1')
-    } catch {
-      /* private mode */
-    }
-  }
-
   // drop anywhere
   useEffect(() => {
     const over = (e: DragEvent) => {
@@ -340,7 +367,6 @@ export default function App() {
     const drop = (e: DragEvent) => {
       e.preventDefault()
       setDragOver(false)
-      seen()
       if (e.dataTransfer) filesFromDrop(e.dataTransfer).then(load)
     }
     addEventListener('dragover', over)
@@ -452,9 +478,8 @@ export default function App() {
 
   return (
     <main
+      ref={mainRef}
       className={`stage${net ? ' hasnet' : ''}${playing ? ' night' : ''}${sel ? ' selopen' : ''}`}
-      onPointerDown={hint ? seen : undefined}
-      onWheel={hint ? seen : undefined}
     >
       {net && (
         <MapView
@@ -463,11 +488,8 @@ export default function App() {
           sel={sel}
           onPick={(id) => {
             setSel(id)
-            if (id) {
-              seen()
-              // one thing at a time: the sheet owns the small screen
-              if (innerWidth <= 720) setKeyOpen(false)
-            }
+            // one thing at a time: the sheet owns the small screen
+            if (id && innerWidth <= 720) setKeyOpen(false)
             if (guide === 2 || guide === 1) setGuide(3)
           }}
           onPickWorks={(w: Works) => {
@@ -584,7 +606,7 @@ export default function App() {
 
       {/* transport dock — the ride */}
       {net && ride && ride.stops.length > 1 && rideUi && (
-        <section className="dock" aria-label="ride controls">
+        <section ref={dockRef} className="dock" aria-label="ride controls">
           <div className="svcpick">
             <button aria-label="previous service" onClick={() => setSvcIdx((i) => (i - 1 + net.corridors.length) % net.corridors.length)}>‹</button>
             <i className="svcchip" style={{ background: net.corridors[ride.corridorIdx]?.lines.find((l) => l.trunk)?.color }}>
@@ -611,7 +633,7 @@ export default function App() {
           <div className="rideinfo">
             <div className="led">
               <span>{rideUi.stop >= rideUi.total ? 'terminus' : 'next'}</span>
-              <b key={rideUi.next}>{rideUi.next}</b>
+              <LedText text={rideUi.next} />
             </div>
             <RideProg
               stop={rideUi.stop}
@@ -650,10 +672,23 @@ export default function App() {
         />
       )}
 
-      {/* first-run guide — hanging platform signs, learn by doing.
-          The ride supersedes it: pressing play ends the tour. */}
+      {/* first-run guide — hanging platform signs, each pinned above the
+          station or control it teaches. The ride supersedes it. */}
       {guide > 0 && !playing && (
-        <div className={`gsign g${guide}`} role="note">
+        <div
+          className={`gsign g${guide}`}
+          role="note"
+          style={
+            gpos
+              ? {
+                  left: Math.max(140, Math.min(innerWidth - 140, gpos.x)),
+                  top: Math.max(14, gpos.y - (guide === 3 ? 108 : 128)),
+                  bottom: 'auto',
+                  transform: 'translateX(-50%)',
+                }
+              : undefined
+          }
+        >
           <div className="sign">
             <b>{guide === 1 ? 'every station is a step the agent took' : guide === 2 ? 'a branch peeled off — a subagent ran alongside' : 'ride the line'}</b>
             <p>
@@ -665,12 +700,6 @@ export default function App() {
             </p>
             <button onClick={guideDone}>skip the tour</button>
           </div>
-        </div>
-      )}
-
-      {hint && net && !guide && (
-        <div className="hint" role="note">
-          <b>first ride</b> drag to pan · scroll to zoom · click a station · ←→ ride the line
         </div>
       )}
 
@@ -773,6 +802,26 @@ function FareMeter({ value, reduced }: { value: number; reduced: boolean }) {
   return <b>{fmtK(shown)}</b>
 }
 
+/** the LED board's text — a persistent element so destination changes
+    crossfade instead of remounting mid-frame */
+function LedText({ text }: { text: string }) {
+  const ref = useRef<HTMLElement>(null)
+  const prev = useRef(text)
+  useEffect(() => {
+    if (prev.current === text) return
+    prev.current = text
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    ref.current?.animate(
+      [
+        { opacity: 0.15, transform: 'translateX(12px)' },
+        { opacity: 1, transform: 'none' },
+      ],
+      { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
+    )
+  }, [text])
+  return <b ref={ref}>{text}</b>
+}
+
 /** progress slider — drag to scrub with a station preview, arrows when focused */
 function RideProg({ stop, total, names, onSeek }: { stop: number; total: number; names: string[]; onSeek: (i: number) => void }) {
   const [preview, setPreview] = useState<number | null>(null)
@@ -790,10 +839,18 @@ function RideProg({ stop, total, names, onSeek }: { stop: number; total: number;
       aria-valuemin={1}
       aria-valuenow={stop}
       aria-valuemax={total}
+      aria-valuetext={names[stop - 1]}
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') (e.preventDefault(), e.stopPropagation(), onSeek(stop - 2))
-        else if (e.key === 'ArrowRight') (e.preventDefault(), e.stopPropagation(), onSeek(stop))
+        const go = (i: number) => {
+          e.preventDefault()
+          e.stopPropagation()
+          onSeek(i)
+        }
+        if (e.key === 'ArrowLeft') go(stop - 2)
+        else if (e.key === 'ArrowRight') go(stop)
+        else if (e.key === 'Home') go(-1)
+        else if (e.key === 'End') go(total - 1)
       }}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId)
