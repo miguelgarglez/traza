@@ -1,9 +1,9 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1920, height=1080" />
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1080, height=1080">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
     <style>
       * {
         margin: 0;
@@ -12,44 +12,57 @@
       }
       html,
       body {
-        margin: 0;
-        width: 1920px;
+        width: 1080px;
         height: 1080px;
         overflow: hidden;
-        background: #0a0a0a;
+        background: #000;
       }
       #root {
+        position: relative;
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        background: #EDF0F5;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-      }
-      #title {
-        color: #f4f4f5;
-        font-size: 72px;
-        font-weight: 600;
-        letter-spacing: -0.03em;
       }
     </style>
   </head>
   <body>
-    <div
-      id="root"
-      data-composition-id="main"
-      data-start="0"
-      data-duration="10"
-      data-width="1920"
-      data-height="1080"
-    >
-      <h1 id="title" class="clip" data-start="0" data-duration="10" data-track-index="0">Title</h1>
+    <div data-hf-id="hf-g9l0" id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1080">
+      <div data-hf-id="hf-g4jn" id="el-01-hook" class="scene" data-composition-id="01-hook" data-composition-src="compositions/frames/01-hook.html" data-start="0" data-duration="4" data-track-index="1"></div>
+
+      <div data-hf-id="hf-8qp4" id="el-02-stations" class="scene" data-composition-id="02-stations" data-composition-src="compositions/frames/02-stations.html" data-start="4" data-duration="6" data-track-index="1"></div>
+
+      <div data-hf-id="hf-3zhn" id="el-03-lines" class="scene" data-composition-id="03-lines" data-composition-src="compositions/frames/03-lines.html" data-start="10" data-duration="5" data-track-index="1"></div>
+
+      <div data-hf-id="hf-h8ow" id="el-04-ride" class="scene" data-composition-id="04-ride" data-composition-src="compositions/frames/04-ride.html" data-start="15" data-duration="9" data-track-index="1"></div>
+
+      <div data-hf-id="hf-tdel" id="el-05-end" class="scene" data-composition-id="05-end" data-composition-src="compositions/frames/05-end.html" data-start="24" data-duration="6" data-track-index="1"></div>
+
+      <video data-hf-id="hf-8v7w" id="b01-video" src="assets/footage/a-boot.webm" preload="auto" data-media-start="0" muted playsinline class="clip" style="position:absolute;left:0px;top:0px;width:1080px;height:1080px;object-fit:cover" data-start="0" data-duration="4" data-track-index="1001"></video>
+
+      <video data-hf-id="hf-8fsx" id="b02-near" src="assets/footage/b-near.webm" preload="auto" data-media-start="2" muted playsinline class="clip" style="position:absolute;left:0px;top:0px;width:1080px;height:1080px;object-fit:cover" data-start="4" data-duration="3.4" data-track-index="2001"></video>
+
+      <video data-hf-id="hf-vdps" id="b02-select" src="assets/footage/c-select.webm" preload="auto" data-media-start="1.5" muted playsinline class="clip" style="position:absolute;left:0px;top:0px;width:1080px;height:1080px;object-fit:cover" data-start="7.4" data-duration="2.6" data-track-index="2001"></video>
+
+      <video data-hf-id="hf-thc7" id="b03-key" src="assets/footage/d-key.webm" preload="auto" data-media-start="4.25" muted playsinline class="clip" style="position:absolute;left:0px;top:0px;width:1080px;height:1080px;object-fit:cover" data-start="10" data-duration="5" data-track-index="3001"></video>
+
+      <video data-hf-id="hf-dxfw" id="b04-e1" src="assets/footage/e1-depart.webm" preload="auto" data-media-start="3.9" muted playsinline class="clip" style="position:absolute;left:0px;top:0px;width:1080px;height:1080px;object-fit:cover" data-start="15" data-duration="6.4" data-track-index="4001"></video>
+
+      <video data-hf-id="hf-w57q" id="b04-e2" src="assets/footage/e2-terminus.webm" preload="auto" data-media-start="4.25" muted playsinline class="clip" style="position:absolute;left:0px;top:0px;width:1080px;height:1080px;object-fit:cover" data-start="21.4" data-duration="2.6" data-track-index="4002"></video>
+
+      <video data-hf-id="hf-1tha" id="vid-terminus" src="assets/footage/e2-terminus.webm" preload="auto" data-media-start="9" muted playsinline class="clip" style="position:absolute;left:0px;top:0px;width:1080px;height:1080px;object-fit:cover" data-start="24" data-duration="2.8" data-track-index="5001"></video>
+
     </div>
+
     <script>
-      const tl = gsap.timeline({ paused: true });
-      // Example: tl.fromTo("#title", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6 }, 0);
-      window.__timelines["main"] = tl;
-      tl.seek(0);
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
     </script>
   </body>
 </html>
