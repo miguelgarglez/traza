@@ -24,9 +24,10 @@ function text(v: unknown): string {
   return String(v)
 }
 
-function firstLine(s: string, n = 90): string {
-  const l = s.replace(/\s+/g, ' ').trim()
-  return l.length > n ? l.slice(0, n - 1) + '…' : l
+// the model keeps the whole first line — truncation lives at render
+// (map labels shorten to fit; inspector/finder clamp visually)
+function firstLine(s: string): string {
+  return (s.split('\n')[0] ?? '').replace(/\s+/g, ' ').trim()
 }
 
 export function parseCodexRollout(path: string, text_: string): Session {

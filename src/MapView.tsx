@@ -304,18 +304,19 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       fitTo(net.bounds.x0, net.bounds.y0, net.bounds.x1, net.bounds.y1, false)
     } else {
       const v = viewRect()
-      // a readable neighborhood: ~one screenful at k≈0.9. The service
-      // nameboard is content — keep it in frame — while the big headboard
-      // is furniture that lives further left, outside the opening bounds.
-      // On phones the key and dock already carry the service title, so the
-      // nameboard is freed too — station glyphs need the pixels more.
+      // a readable neighborhood: ~one screenful at k≈0.9. On phones the
+      // key and dock already carry the service title, so the nameboard is
+      // freed too — station glyphs need the pixels more.
       const mobile = v.w <= 720
       const wSpan = mobile ? Math.max(320, (v.w - v.right) / 0.9) : Math.max(360, (v.w - v.right) / 0.95)
       const nbLeft = s0.x - P * 1.9 - 30 - trunk.service.length * 5.4
-      const x0 = mobile ? s0.x - P * 1.2 : Math.min(s0.x - P * 2.2, nbLeft - 16)
+      // desktop keeps the system headboard in the opening frame — the
+      // imprint is the product's name on first paint, worth the zoom-out
+      const hbLeft = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 262
+      const x0 = mobile ? s0.x - P * 1.2 : Math.min(s0.x - P * 2.2, nbLeft - 16, hbLeft - 24)
       const x1 = Math.min(corridorBounds[0]!.geo.x1 + 30, s0.x + wSpan)
       // vertical extent of everything inside that x-window
-      let y0 = c0.trunkY - U * 1.2 // the headboard hangs above the trunk
+      let y0 = c0.trunkY - U * 1.5 // the headboard hangs above the trunk
       let y1 = c0.trunkY + U * 0.8
       for (const l of c0.lines) {
         for (const s of l.stations)
@@ -491,8 +492,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     const lc = new Map<string, string>()
     for (const c of net.corridors) {
       for (const l of c.lines) {
-        for (const s of l.stations) si.set(s.id, s)
-        lc.set(l.id, l.color)
+        // key by station id, not line id — line ids are session-local
+        // ('t-0' in every corridor) and collide across services
+        for (const s of l.stations) {
+          si.set(s.id, s)
+          lc.set(s.id, l.color)
+        }
       }
       for (const w of c.works) wi.set(w.id, w)
     }
@@ -630,8 +635,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
                     own color, the wayfinding language of the map itself */}
                 <g className="pin">
                   <line x1={0} y1={-2} x2={0} y2={-13} stroke="#8b99ad" strokeWidth={1.6} />
-                  <circle cy={-17.5} r={5.2} fill="#fff" stroke={lineColors.get(selStation.lineId) ?? '#8b99ad'} strokeWidth={2.2} />
-                  <line x1={-5.2} y1={-17.5} x2={5.2} y2={-17.5} stroke={lineColors.get(selStation.lineId) ?? '#8b99ad'} strokeWidth={2.2} />
+                  <circle cy={-17.5} r={5.2} fill="#fff" stroke={lineColors.get(selStation.id) ?? '#8b99ad'} strokeWidth={2.2} />
+                  <line x1={-5.2} y1={-17.5} x2={5.2} y2={-17.5} stroke={lineColors.get(selStation.id) ?? '#8b99ad'} strokeWidth={2.2} />
                 </g>
               </g>
             </g>

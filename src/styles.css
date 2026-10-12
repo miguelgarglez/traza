@@ -133,7 +133,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 @media (prefers-reduced-motion: reduce) { .halo-ring { animation: none; opacity: 0.35; } }
 
 .lb {
-  font: 500 9.5px var(--cond); fill: #3a4756; text-anchor: middle;
+  font: 500 10px var(--cond); fill: #3a4756; text-anchor: middle;
   pointer-events: none; opacity: 0.95;
 }
 .plano[data-z='far'] .lb1, .plano[data-z='far'] .lb2 { display: none; }
@@ -306,7 +306,11 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .inspector.worksheet { bottom: auto; max-height: calc(100vh - 32px); }
 
 .inspector header { display: flex; gap: 10px; align-items: flex-start; }
-.inspector h2 { margin: 0; font: 600 15px/1.25 var(--cond); }
+.inspector h2 {
+  margin: 0; font: 600 15px/1.25 var(--cond);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+  overflow: hidden; /* clamp, never mid-word ellipsis */
+}
 .inspector .sub { margin: 3px 0 0; font: 500 11.5px var(--cond); color: var(--mute); }
 .inspector .x {
   margin-left: auto; width: 26px; height: 26px; border-radius: 7px;
@@ -796,6 +800,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .stage.night .tip b { color: #e8eef7; }
 .stage.night .tip span { color: #8898ae; }
 .stage.night .followpill { background: rgba(19, 26, 37, 0.95); }
+.stage.night .followpill:active { background: #232f40; }
 
 /* one reduced-motion policy, applied to every effect */
 @media (prefers-reduced-motion: reduce) {
@@ -809,8 +814,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   .ptswitch.live { opacity: 0; }
   .train .beam, .train .pool, .train .head,
   .plano .st > *, .rideprog i, .progthumb, .zone, .track { transition: none; }
-  /* must outrank the night chrome transition list, whatever the theme */
-  .inspector, .stage.night .inspector { transition: none; }
+  /* must outrank the night chrome transition list, whatever the theme —
+     and outrank the closing exit's own !important */
+  .inspector, .stage.night .inspector,
+  .inspector.closing, .stage.night .inspector.closing { transition: none !important; }
   .dock .play.nudge { animation: none; box-shadow: 0 0 0 3px rgba(15, 78, 158, 0.4); }
 }
 @media (prefers-reduced-motion: reduce) and (hover: hover) and (pointer: fine) {

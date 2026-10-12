@@ -42,6 +42,10 @@ export default function App() {
   const [speed, setSpeed] = useState(1)
   const [rideUi, setRideUi] = useState<{ stop: number; total: number; name: string; next: string } | null>(null)
   const rideRef = useRef<{ leg: number; dist: number; dwell: number }>({ leg: 0, dist: 0, dwell: 0 })
+  // express seek: a pending stop index the train fast-travels to along the
+  // real track — forward through stops, backward by rewinding legs
+  const seekRef = useRef<number | null>(null)
+  const [seeking, setSeeking] = useState<number | null>(null)
   const reduced = useReducedMotion()
   const dockRef = useRef<HTMLElement>(null)
   const mainRef = useRef<HTMLElement>(null)
@@ -249,6 +253,12 @@ export default function App() {
       const dt = Math.min(64, now - last)
       last = now
       const rp = rideRef.current
+      // an express seek owns the train while it's travelling — the normal
+      // loop just holds the frame until the seek releases it
+      if (seekRef.current !== null) {
+        raf = requestAnimationFrame(tick)
+        return
+      }
       const leg = ride.legs[rp.leg]
       if (!leg) {
         setPlaying(false)
@@ -317,23 +327,113 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, ride, speed, reduced, net])
 
+  const placeTrainAt = useCallback(
+    (k: number) => {
+      if (!ride) return
+      const stop = ride.stops[k]!
+      const prev = ride.legs[k - 1]
+      const heading = prev ? legPoint(prev, prev.len).angle : 0
+      map.current?.setTrain(stop.x, stop.y, heading, true, lineColorOf(net, stop.lineId))
+    },
+    [ride, net],
+  )
+
+  // express seek — the train fast-travels the real track to the target:
+  // forward through each leg, backward by rewinding. Nothing teleports.
+  useEffect(() => {
+    if (seeking === null || !ride || !ride.stops.length) return
+    const rp = rideRef.current
+    rp.dwell = 0
+    const RATE = 2400 // world px/s — brisk, readable, proportional to track
+    let last = performance.now()
+    let lastLeg = -1
+    let raf = requestAnimationFrame(function step(now: number) {
+      const dt = Math.min(64, now - last)
+      last = now
+      const target = seekRef.current
+      if (target === null) return
+      const px = (RATE * dt) / 1000
+      if (rp.leg > target) {
+        // rewind — walk the legs backward
+        rp.dist -= px
+        while (rp.dist <= 0 && rp.leg > target) {
+          rp.leg -= 1
+          rp.dist = ride.legs[rp.leg]?.len ?? 0
+        }
+      } else if (rp.leg < target) {
+        rp.dist += px
+        while (rp.dist >= (ride.legs[rp.leg]?.len ?? 0) && rp.leg < target) {
+          rp.dist -= ride.legs[rp.leg]!.len
+          rp.leg += 1
+        }
+      }
+      if (rp.leg === target) {
+        // arrived — release the train back to the normal loop
+        rp.dist = 0
+        rp.dwell = 0
+        const stop = ride.stops[target]!
+        setSel(stop.id)
+        setRideUi({
+          stop: target + 1,
+          total: ride.stops.length,
+          name: stop.name,
+          next: ride.stops[target + 1]?.name ?? 'terminus',
+        })
+        placeTrainAt(target)
+        if (followRef.current) map.current?.keepInView(stop.x, stop.y)
+        seekRef.current = null
+        setSeeking(null)
+        return
+      }
+      const leg = ride.legs[rp.leg]
+      if (leg) {
+        const p = legPoint(leg, Math.max(0, Math.min(rp.dist, leg.len)))
+        map.current?.setTrain(p.x, p.y, p.angle, true, lineColorOf(net, leg.stop.lineId))
+        if (followRef.current) map.current?.keepInView(p.x, p.y)
+        // flash the junctions it crosses, silently — haptics stay on the
+        // user's own throws, not express transit
+        leg.switches.forEach((sw) => {
+          if (Math.hypot(p.x - sw.x, p.y - sw.y) < 16) map.current?.switchThrow(sw.x, sw.y)
+        })
+      }
+      if (rp.leg !== lastLeg) {
+        lastLeg = rp.leg
+        setRideUi({
+          stop: rp.leg + 1,
+          total: ride.stops.length,
+          name: ride.stops[rp.leg]?.name ?? '',
+          next: ride.stops[rp.leg + 1]?.name ?? 'terminus',
+        })
+      }
+      raf = requestAnimationFrame(step)
+    })
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seeking, ride, net])
+
   const rideTo = useCallback(
     (stopIdx: number) => {
       if (!ride || !ride.stops.length) return
       const k = Math.max(0, Math.min(ride.stops.length - 1, stopIdx))
-      rideRef.current = { leg: Math.min(k, ride.legs.length - 1), dist: 0, dwell: 0 }
       switchFired.current.clear()
       setFollowOn(true)
       haptic('nudge') // user-initiated seek
-      const stop = ride.stops[k]!
-      setSel(stop.id)
-      setRideUi({ stop: k + 1, total: ride.stops.length, name: stop.name, next: ride.stops[k + 1]?.name ?? 'terminus' })
-      const prev = ride.legs[k - 1]
-      const heading = prev ? legPoint(prev, prev.len).angle : 0
-      map.current?.setTrain(stop.x, stop.y, heading, true, lineColorOf(net, stop.lineId))
-      map.current?.flyTo(stop.x, stop.y, 700, 420)
+      if (reduced) {
+        // reduced motion: arrive instantly, skip the express
+        rideRef.current = { leg: Math.min(k, ride.legs.length - 1), dist: 0, dwell: 0 }
+        seekRef.current = null
+        setSeeking(null)
+        const stop = ride.stops[k]!
+        setSel(stop.id)
+        setRideUi({ stop: k + 1, total: ride.stops.length, name: stop.name, next: ride.stops[k + 1]?.name ?? 'terminus' })
+        placeTrainAt(k)
+        map.current?.flyTo(stop.x, stop.y, 700, 420)
+        return
+      }
+      seekRef.current = k
+      setSeeking(k)
     },
-    [ride, net],
+    [ride, net, reduced, placeTrainAt],
   )
 
   const load = useCallback(async (dropped: DroppedFile[], staged = true) => {

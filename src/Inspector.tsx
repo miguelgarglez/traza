@@ -107,8 +107,12 @@ function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) 
             if (next !== full) onSnap?.(next)
           }
           // the gesture's click dispatches synchronously after pointerup —
-          // keep moved through it so a drag never toggles, then release
-          setTimeout(() => (moved.current = false), 0)
+          // keep moved/armed through it so a drag never toggles, then
+          // release; if no click ever arrives, nothing stays armed
+          setTimeout(() => {
+            moved.current = false
+            armed.current = false
+          }, 0)
         }
         const cancel = (ev: PointerEvent) => {
           if (ev.pointerId !== pid) return
