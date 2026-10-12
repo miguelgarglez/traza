@@ -855,7 +855,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   .gsign .sign, .maptools button, .pulse { animation: none !important; }
   .plano .arr .track, .plano .arr .st { animation: none; }
   .plano.fresh .track, .plano.fresh .st, .plano.fresh .lb,
-  .plano.fresh .nameboard, .plano.fresh .works, .plano.fresh .zone { animation: none; }
+  .plano.fresh .nameboard, .plano.fresh .works, .plano.fresh .zone,
+  .plano.fresh .works .stub { animation: none; }
   /* the points-throw flash and hover scale are motion too */
   .ptswitch.live, .ptswitch.live .swtri { animation: none; }
   .ptswitch.live { opacity: 0; }
