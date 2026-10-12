@@ -28,6 +28,12 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>('surveying the export…')
   const [sel, setSel] = useState<string | null>(null)
   const [keyOpen, setKeyOpen] = useState(() => typeof innerWidth === 'undefined' || innerWidth > 720)
+  // the user asked for the key body themselves — during the tour's first
+  // step the panel stays shut unless explicitly pinned open
+  const [keyPinned, setKeyPinned] = useState(false)
+  // first paint is a held system beat: chrome waits for the opening dive
+  // to land (or for a gesture to steal the camera) before it appears
+  const [landed, setLanded] = useState(false)
   const [srcOpen, setSrcOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const map = useRef<MapHandle>(null)
@@ -100,10 +106,20 @@ export default function App() {
   // touch feedback — iOS-capable via web-haptics, user-switchable
   const [hap, setHap] = useState(hapticsOn())
 
-  // first run: platform-sign guide, three learn-by-doing steps
+  // first run: platform-sign guide, three learn-by-doing steps — the first
+  // sign hangs once the opening dive has landed, so it owns the frame
   useEffect(() => {
     if (!net || localStorage.getItem('traza.guide')) return
-    const t = setTimeout(() => setGuide(1), 1800)
+    const t = setTimeout(() => setGuide(1), 3000)
+    return () => clearTimeout(t)
+  }, [net])
+
+  // a new network re-runs the opening beat — chrome waits for the dive;
+  // the fallback covers paths where no flight ever fires
+  useEffect(() => {
+    if (!net) return
+    setLanded(false)
+    const t = setTimeout(() => setLanded(true), 4600)
     return () => clearTimeout(t)
   }, [net])
 
@@ -262,7 +278,9 @@ export default function App() {
       }
       const leg = ride.legs[rp.leg]
       if (!leg) {
-        setPlaying(false)
+        // past the terminus leg — the 'all change' hold is time-based;
+        // its timeout flips `playing`, so a re-ticked loop just idles
+        raf = requestAnimationFrame(tick)
         return
       }
       if (rp.dwell > 0) {
@@ -306,7 +324,6 @@ export default function App() {
         // no haptic on ordinary arrivals — at speed that's constant noise;
         // physical feedback stays for seeks, detents and the switch throw
         if (rp.leg >= ride.legs.length) {
-          setPlaying(false)
           map.current?.terminusGlow(ride.corridorIdx)
           setRideUi({
             stop: ride.stops.length,
@@ -314,6 +331,11 @@ export default function App() {
             name: 'terminus — all change',
             next: `${arrived.name} · ${fmtK(fares[fares.length - 1] ?? 0)} tok`,
           })
+          haptic('success') // arrived — the platform chime
+          // the held beat: the train stays parked, night and the corridor
+          // flare burn while 'all change' reads on the board — then the
+          // lights come up and the service releases
+          setTimeout(() => setPlaying(false), reduced ? 60 : 1700)
           return
         }
       } else {
@@ -374,12 +396,26 @@ export default function App() {
         rp.dwell = 0
         const stop = ride.stops[target]!
         setSel(stop.id)
-        setRideUi({
-          stop: target + 1,
-          total: ride.stops.length,
-          name: stop.name,
-          next: ride.stops[target + 1]?.name ?? 'terminus',
-        })
+        if (target >= ride.legs.length) {
+          // sought straight to the terminus — it earns the same held beat
+          // as a ridden arrival: corridor flare + 'all change' on the board
+          map.current?.terminusGlow(ride.corridorIdx)
+          setRideUi({
+            stop: ride.stops.length,
+            total: ride.stops.length,
+            name: 'terminus — all change',
+            next: `${stop.name} · ${fmtK(fares[fares.length - 1] ?? 0)} tok`,
+          })
+          haptic('success')
+          setTimeout(() => setPlaying(false), reduced ? 60 : 1700)
+        } else {
+          setRideUi({
+            stop: target + 1,
+            total: ride.stops.length,
+            name: stop.name,
+            next: ride.stops[target + 1]?.name ?? 'terminus',
+          })
+        }
         placeTrainAt(target)
         if (followRef.current) map.current?.keepInView(stop.x, stop.y)
         seekRef.current = null
@@ -599,7 +635,7 @@ export default function App() {
   return (
     <main
       ref={mainRef}
-      className={`stage${net ? ' hasnet' : ''}${playing ? ' night' : ''}${sel ? ' selopen' : ''}`}
+      className={`stage${net ? ' hasnet' : ''}${playing ? ' night' : ''}${sel ? ' selopen' : ''}${net && !landed ? ' boot' : ''}`}
     >
       {net && (
         <MapView
@@ -621,6 +657,7 @@ export default function App() {
           solo={solo ?? (playing && ride ? ride.corridorIdx : null)}
           onUserPan={() => guide === 1 && setGuide(2)}
           onUserGesture={() => setFollowOn(false)}
+          onArrive={() => setLanded(true)}
         />
       )}
 
@@ -672,7 +709,13 @@ export default function App() {
       {/* key — service legend, bottom left */}
       {net && (
         <section className={keyOpen ? 'key' : 'key shut'} aria-label="service key">
-          <button className="keyhead" onClick={() => setKeyOpen(!keyOpen)}>
+          <button
+            className="keyhead"
+            onClick={() => {
+              setKeyPinned(true)
+              setKeyOpen(!keyOpen)
+            }}
+          >
             <b>key</b>
             <span>{net.stats.stations} stops · {net.stats.lines} lines{net.stats.works ? ` · ${net.stats.works} works` : ''}</span>
             {ride && (
@@ -685,7 +728,10 @@ export default function App() {
             )}
             <i>{keyOpen ? '▾' : '▴'}</i>
           </button>
-          {keyOpen && (
+          {/* during the opening beat and the tour's first step the key
+              stays a single row — the dive and the hanging sign own the
+              frame; a tap on the header always overrides */}
+          {keyOpen && landed && (guide !== 1 || keyPinned) && (
             <div className="keybody">
               {net.corridors.map((c, i) => {
                 const trunk = c.lines.find((l) => l.trunk)
@@ -786,7 +832,7 @@ export default function App() {
           <button className="skip" aria-label="next stop" onClick={() => rideTo(rideUi.stop)} disabled={rideUi.stop >= rideUi.total}>▶|</button>
           <div className="rideinfo">
             <div className="led">
-              <span>{rideUi.stop >= rideUi.total ? 'all change' : 'next'}</span>
+              <LedText as="span" text={rideUi.stop >= rideUi.total ? 'all change' : 'next'} />
               <LedText text={rideUi.next} />
             </div>
             <RideProg
@@ -795,9 +841,7 @@ export default function App() {
               names={ride.stops.map((s) => s.name)}
               onSeek={rideTo}
             />
-            <span className="ridesub">
-              {rideUi.name} · {rideUi.stop}/{rideUi.total}
-            </span>
+            <LedText as="span" className="ridesub" text={`${rideUi.name} · ${rideUi.stop}/${rideUi.total}`} />
           </div>
           <div className="fare" title="tokens spent so far on this service">
             <FareMeter value={fares[rideUi.stop - 1] ?? 0} reduced={reduced} />
@@ -967,10 +1011,11 @@ function FareMeter({ value, reduced }: { value: number; reduced: boolean }) {
   return <b>{fmtK(shown)}</b>
 }
 
-/** the LED board's text — a persistent element so destination changes
-    crossfade instead of remounting mid-frame */
-function LedText({ text }: { text: string }) {
-  const ref = useRef<HTMLElement>(null)
+/** a text fragment that slides its replacement in from the right — the
+    LED board's destination, its mode label, and the position line all
+    morph instead of hard-cutting */
+function LedText({ text, as = 'b', className }: { text: string; as?: 'b' | 'span'; className?: string }) {
+  const ref = useRef<HTMLElement | null>(null)
   const prev = useRef(text)
   const anim = useRef<Animation | null>(null)
   // if the user flips reduced-motion mid-flight, the in-flight swap dies too
@@ -996,7 +1041,15 @@ function LedText({ text }: { text: string }) {
       { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
     ) ?? null
   }, [text])
-  return <b ref={ref}>{text}</b>
+  return as === 'b' ? (
+    <b ref={ref} className={className}>
+      {text}
+    </b>
+  ) : (
+    <span ref={ref} className={className}>
+      {text}
+    </span>
+  )
 }
 
 /** progress slider — drag to scrub with a station preview, arrows when focused */

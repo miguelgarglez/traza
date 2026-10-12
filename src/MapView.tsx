@@ -33,6 +33,8 @@ interface Props {
   onUserPan?: () => void
   /** fired on every manual gesture (drag, wheel, pinch) — suspends ride follow */
   onUserGesture?: () => void
+  /** the opening camera beat landed or was stolen — chrome may arrive */
+  onArrive?: () => void
 }
 
 const K_MIN = 0.02
@@ -59,7 +61,7 @@ function stationGlyph(s: Station, color: string, sel: boolean) {
   return <circle key={s.id} cx={s.x} cy={s.y} r={2.3} fill={color} />
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, onUserPan, onUserGesture }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, onUserPan, onUserGesture, onArrive }, ref) {
   const svgRef = useRef<SVGSVGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
   const trainRef = useRef<SVGGElement>(null)
@@ -103,6 +105,14 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }, [reduced])
   const gestureRef = useRef(onUserGesture)
   gestureRef.current = onUserGesture
+  const arriveRef = useRef(onArrive)
+  arriveRef.current = onArrive
+  const arrived = useRef(false)
+  const arrive = () => {
+    if (arrived.current) return
+    arrived.current = true
+    arriveRef.current?.()
+  }
 
   const apply = () => {
     const g = worldRef.current
@@ -153,7 +163,14 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     return { w: r.width, h: r.height, right, bottom }
   }
 
-  const fitTo = (x0: number, y0: number, x1: number, y1: number, animate = false) => {
+  const fitTo = (
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    animate = false,
+    opts: { ms?: number; inout?: boolean; done?: () => void } = {},
+  ) => {
     const svg = svgRef.current
     if (!svg) return
     // a new fit supersedes any flight still in the air
@@ -170,15 +187,21 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     if (!animate || reduced) {
       cam.current = target
       apply()
+      opts.done?.()
       return
     }
-    if (flight.current != null) cancelAnimationFrame(flight.current)
     const from = { ...cam.current }
     const t0 = performance.now()
-    const dur = 620
+    const dur = opts.ms ?? 620
     const step = (now: number) => {
       const p = Math.min(1, (now - t0) / dur)
-      const e = 1 - Math.pow(1 - p, 3)
+      // the dive uses easeInOut — accelerate away, settle into the station;
+      // ordinary retargets stay ease-out, responsive to the user's hand
+      const e = opts.inout
+        ? p < 0.5
+          ? 4 * p * p * p
+          : 1 - Math.pow(-2 * p + 2, 3) / 2
+        : 1 - Math.pow(1 - p, 3)
       cam.current = {
         x: from.x + (target.x - from.x) * e,
         y: from.y + (target.y - from.y) * e,
@@ -186,7 +209,10 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       }
       apply()
       if (p < 1) flight.current = requestAnimationFrame(step)
-      else flight.current = null
+      else {
+        flight.current = null
+        opts.done?.()
+      }
     }
     flight.current = requestAnimationFrame(step)
   }
@@ -268,7 +294,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       svg.querySelectorAll('.arr').forEach((el) => el.classList.remove('arr'))
       const groups = svg.querySelectorAll(`[data-ci="${ci}"]`)
       groups.forEach((el) => el.classList.add('arr'))
-      setTimeout(() => groups.forEach((el) => el.classList.remove('arr')), 2600)
+      setTimeout(() => groups.forEach((el) => el.classList.remove('arr')), 2900)
     },
     setGhost: (wx, wy, angle, visible, color) => {
       const g = ghostRef.current
@@ -300,11 +326,13 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   // The whole network is a zoom-out away ('f' / the fit button).
   const openFly = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    arrived.current = false
     const c0 = net.corridors[0]
     const trunk = c0?.lines.find((l) => l.trunk)
     const s0 = trunk?.stations[0]
     if (!c0 || !trunk || !s0) {
       fitTo(net.bounds.x0, net.bounds.y0, net.bounds.x1, net.bounds.y1, false)
+      arrive()
     } else {
       const v = viewRect()
       // a readable neighborhood: ~one screenful at k≈0.9. On phones the
@@ -339,13 +367,17 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       const d0 = { x0, y0: y0 - U * 0.4, x1, y1: y1 + U * 0.5 }
       if (reduced) {
         fitTo(d0.x0, d0.y0, d0.x1, d0.y1, false)
+        arrive()
       } else {
         const g = corridorBounds[0]!.geo
         fitTo(g.x0 - 60, g.y0 - U * 0.6, g.x1 + 60, g.y1 + U * 0.9, false)
+        // hold the system-wide beat while the track lays in — long enough
+        // to read the network's shape, then dive on the same flight curve
+        // the rest of the app uses
         openFly.current = setTimeout(() => {
           openFly.current = null
-          fitTo(d0.x0, d0.y0, d0.x1, d0.y1, true)
-        }, 780)
+          fitTo(d0.x0, d0.y0, d0.x1, d0.y1, true, { ms: 900, inout: true, done: arrive })
+        }, 1650)
       }
     }
     setFresh(!reduced)
@@ -367,6 +399,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       // a gesture always wins over a camera flight and suspends ride-follow
       if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
       if (openFly.current) { clearTimeout(openFly.current); openFly.current = null }
+      arrive()
       gestureRef.current?.()
       svg.dataset.pan = '1'
       clearTimeout(panIdle)
@@ -389,6 +422,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     // a gesture always wins over a camera flight — nothing fights the hand
     if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
     if (openFly.current) { clearTimeout(openFly.current); openFly.current = null }
+    arrive()
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pointers.current.size === 2) {
@@ -585,14 +619,21 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               <g key={l.id} data-ci={ci} style={{ ...fade, opacity: dim(ci) }}>
                 {l.segs.map((sg, j) =>
                   sg.kind === 'track' ? (
-                    <path
-                      key={j}
-                      className={sg.inferred ? 'track inferred' : 'track'}
-                      style={{ ['--d' as string]: `${ci * 160 + li * 90}ms` }}
-                      pathLength={1}
-                      d={d(sg.pts)}
-                      stroke={l.color}
-                    />
+                    /* at reading zoom the line becomes real trackwork —
+                       an ink casing under the color band and a pale
+                       ballast slit down the middle cut it into two
+                       rails (casing + bed hidden until 'near') */
+                    <g key={j}>
+                      {!sg.inferred && <path className="trkcasing" d={d(sg.pts)} />}
+                      <path
+                        className={sg.inferred ? 'track inferred' : 'track'}
+                        style={{ ['--d' as string]: `${ci * 160 + li * 90}ms` }}
+                        pathLength={1}
+                        d={d(sg.pts)}
+                        stroke={l.color}
+                      />
+                      {!sg.inferred && <path className="trkbed" d={d(sg.pts)} />}
+                    </g>
                   ) : sg.kind === 'link' ? (
                     <g key={j}>
                       <path className="link" d={d(sg.pts)} stroke={l.color} />
@@ -685,21 +726,30 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             <rect className="win" x={-8} y={-3.4} width={7} height={6.8} rx={2} />
             <rect className="win" x={1} y={-3.4} width={7} height={6.8} rx={2} />
           </g>
-          {/* labels */}
+          {/* labels — at reading zoom a station earns a second line:
+              title above, the step's actor and number below (or above,
+              on whichever side the label hangs off the track) */}
           {net.corridors.map((c, ci) =>
-            c.labels.map((lb: Label, i) => (
-              <text
-                key={`l${i}`}
-                data-ci={ci}
-                style={{ ...fade, opacity: dim(ci) }}
-                className={`lb lb${lb.lod}`}
-                x={lb.x}
-                y={lb.y}
-                textAnchor="middle"
-              >
-                {lb.text}
-              </text>
-            )),
+            c.labels.map((lb: Label, i) => {
+              const st = stationIndex.get(lb.stationId)
+              const sub = st ? `${st.step.actor} · stop ${st.ord + 1}` : null
+              return (
+                <text
+                  key={`l${i}`}
+                  data-ci={ci}
+                  style={{ ...fade, opacity: dim(ci) }}
+                  className={`lb lb${lb.lod}`}
+                  textAnchor="middle"
+                >
+                  {/* sub-line hangs on the label's free side; absolute y so
+                      a hidden sub never shifts the title's baseline */}
+                  {sub && <tspan className="lbsub" x={lb.x} y={lb.y + (lb.side < 0 ? -12 : 12)}>{sub}</tspan>}
+                  <tspan x={lb.x} y={lb.y}>
+                    {lb.text}
+                  </tspan>
+                </text>
+              )
+            }),
           )}
           {/* system headboard — the map's own title plate, drawn into the
               plano like a real map's imprint instead of floating chrome */}
