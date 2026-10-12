@@ -28,6 +28,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 
 .stage { height: 100%; position: relative; }
 
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
 /* ============================ the plano ============================ */
 .mapwrap { position: absolute; inset: 0; background: var(--field); transition: background 1.1s var(--ease); overflow: hidden; }
 .stage.night .mapwrap { background: #0b0e13; }
@@ -109,6 +111,13 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 
 .st { cursor: pointer; }
 .st > g { pointer-events: none; }
+/* hit targets stay fingertip-size on screen at any zoom (--k = camera scale,
+   set imperatively on .world) */
+.st .hit { r: max(11px, min(calc(12px / var(--k, 1)), 18px)); }
+@media (hover: hover) and (pointer: fine) {
+  .st > *:not(.hit) { transition: transform 0.14s var(--ease); transform-box: fill-box; transform-origin: center; }
+  .st:hover > *:not(.hit) { transform: scale(1.3); }
+}
 .plano[data-z='far'] .st-l { display: none; }
 .plano[data-z='far'] .st-m { display: none; }
 .plano[data-z='mid'] .st-l { display: none; }
@@ -140,25 +149,37 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .tip span { font: 500 10.5px var(--cond); color: var(--mute); }
 
 /* ============================ chrome ============================ */
-.titleblock {
-  position: absolute; top: 18px; right: 22px; text-align: right;
-  pointer-events: none; user-select: none;
+/* the wordmark is drawn into the plano itself — a hanging destination
+   board at the head of the first service, like a real map's imprint */
+.headboard { pointer-events: none; }
+.headboard rect { fill: #12233f; }
+.headboard line { stroke: #3a4d68; stroke-width: 2.2; }
+.headboard .hb-name { fill: #eef3fa; font: 700 26px var(--xcond); letter-spacing: 0.02em; }
+.headboard .hb-sub { fill: #8fa6c4; font: 500 10.5px var(--cond); letter-spacing: 0.03em; }
+
+/* visible map tools — the search and fit that shortcuts also offer */
+.maptools {
+  position: absolute; top: 16px; left: 16px; z-index: 5;
+  display: flex; gap: 6px;
 }
-.titleblock h1 {
-  margin: 0; font: 700 30px/0.95 var(--xcond); letter-spacing: 0.01em;
-  color: var(--ink);
+.maptools button {
+  width: 36px; height: 36px; display: grid; place-items: center;
+  background: var(--paper); border: 1px solid var(--edge); border-radius: 10px;
+  color: var(--mute); box-shadow: var(--shadow);
+  transition: color 0.15s, border-color 0.15s, transform 0.1s, background 0.15s;
 }
-.titleblock h1::after {
-  content: ''; display: block; height: 3px; margin-top: 6px; margin-left: auto;
-  width: 100%; background: repeating-linear-gradient(90deg, var(--navy) 0 14px, var(--red) 14px 22px, #6bbe45 22px 32px);
-  border-radius: 2px;
+.maptools button:hover { color: var(--navy); border-color: var(--navy); }
+.maptools button:active { transform: translateY(1px); }
+
+/* follow suspended by a manual gesture during the ride */
+.followpill {
+  position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); z-index: 6;
+  padding: 7px 16px; border-radius: 20px;
+  background: rgba(28, 39, 51, 0.9); color: #ffd97a;
+  font: 600 11px var(--cond); letter-spacing: 0.03em;
+  box-shadow: var(--shadow); animation: rise 0.3s var(--ease);
 }
-.titleblock p { margin: 7px 0 0; font: 500 11.5px var(--cond); color: var(--mute); }
-.localpill {
-  display: inline-block; margin-top: 8px; padding: 3px 9px;
-  font: 600 10px var(--cond); letter-spacing: 0.04em; color: var(--mute);
-  border: 1px solid var(--edge); border-radius: 20px; background: rgba(251, 252, 254, 0.7);
-}
+.followpill:hover { background: var(--ink); }
 
 /* key panel */
 .key {
@@ -183,6 +204,13 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   transition: background 0.15s;
 }
 .svc:hover { background: #f2f5fa; }
+.svc:active { background: #e8edf5; }
+.keyhead:active { background: #f2f5fa; }
+.keyrow:active { background: #f2f5fa; }
+.xferrow:active { background: #e8edf5; }
+.callhead:active { background: #f2f5fa; }
+.finder li:active { background: #e8edf5; }
+.finder li { transition: background 0.12s; }
 .svcchip {
   grid-row: 1 / 3; align-self: center;
   height: 22px; border-radius: 5px; color: #fff;
@@ -393,6 +421,17 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .plano .st > * { transition: filter 0.5s; }
 .plano.riding .st.lit > * { filter: drop-shadow(0 0 5px rgba(255, 240, 190, 0.9)); }
 .plano.riding .st.lit .stname { opacity: 0.95; }
+/* terminus reveal — the ridden route flares awake down its length */
+.plano.arrived .track { animation: arriveglow 1.5s var(--ease); }
+@keyframes arriveglow {
+  0% { filter: drop-shadow(0 0 3px rgba(255, 220, 130, 0)); }
+  30% { filter: drop-shadow(0 0 11px rgba(255, 220, 130, 0.85)); }
+  100% { filter: drop-shadow(0 0 3px rgba(255, 220, 130, 0)); }
+}
+.plano.arrived .st { animation: arrivepop 0.5s var(--ease) both; animation-delay: var(--d, 0ms); }
+@keyframes arrivepop {
+  0% { transform: scale(1); } 45% { transform: scale(1.45); } 100% { transform: scale(1); }
+}
 .train.ghost { opacity: 0.34; }
 .train.ghost .car { filter: none; }
 
@@ -442,9 +481,27 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   text-shadow: 0 0 6px rgba(255, 201, 79, 0.55), 0 0 16px rgba(255, 201, 79, 0.22);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.rideprog { position: relative; height: 13px; margin: 2px 0 1px; cursor: pointer; }
-.rideprog::before { content: ''; position: absolute; top: 5px; left: 0; right: 0; height: 3px; background: #e3e9f1; border-radius: 2px; }
-.rideprog i { position: absolute; top: 5px; left: 0; height: 3px; background: var(--navy); border-radius: 2px; transition: width 0.2s; }
+.rideprog { position: relative; height: 16px; margin: 2px 0 1px; cursor: pointer; touch-action: none; }
+.rideprog::before { content: ''; position: absolute; top: 6px; left: 0; right: 0; height: 3px; background: #e3e9f1; border-radius: 2px; }
+.rideprog i { position: absolute; top: 6px; left: 0; height: 3px; background: var(--navy); border-radius: 2px; transition: width 0.2s; }
+.progthumb {
+  position: absolute; top: 7.5px; width: 11px; height: 11px; margin-left: -5.5px;
+  border-radius: 50%; background: #fff; border: 3px solid var(--navy);
+  box-shadow: 0 1px 3px rgba(16, 30, 50, 0.25); transition: left 0.2s, transform 0.12s;
+}
+.rideprog:hover .progthumb, .rideprog:active .progthumb { transform: scale(1.25); }
+.progprev {
+  position: absolute; bottom: 18px; transform: translateX(-50%);
+  padding: 3px 9px; border-radius: 6px; white-space: nowrap;
+  background: var(--ink); color: #fff; font: 500 10px var(--cond);
+  pointer-events: none;
+}
+.progprev::after {
+  content: ''; position: absolute; top: 100%; left: 50%; margin-left: -4px;
+  border: 4px solid transparent; border-top-color: var(--ink);
+}
+.led b { animation: ledswap 0.3s var(--ease); }
+@keyframes ledswap { from { opacity: 0; transform: translateX(9px); } to { opacity: 1; transform: none; } }
 .ridesub { font: 500 9.5px var(--cond); color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .fare {
   display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
@@ -452,9 +509,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 }
 .fare b {
   font: 700 15px var(--mono); color: var(--ink); letter-spacing: -0.02em;
-  animation: faretick 0.3s var(--ease);
+  font-variant-numeric: tabular-nums;
 }
-@keyframes faretick { from { transform: translateY(5px); opacity: 0.3; } to { transform: none; opacity: 1; } }
 .fare span { font: 600 8.5px var(--xcond); letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
 .speeds { display: flex; flex-direction: column; gap: 2px; }
 .speeds button { font: 700 9px var(--cond); padding: 2px 7px; color: var(--mute); border-radius: 5px; }
@@ -499,9 +555,15 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   position: absolute; z-index: 7; pointer-events: none;
   animation: signhang 0.55s var(--ease);
 }
-.gsign.g1 { left: 50%; bottom: 108px; transform: translateX(-50%); }
-.gsign.g2 { left: 50%; top: 30%; transform: translateX(-50%); }
-.gsign.g3 { left: 50%; bottom: 108px; transform: translateX(-50%); }
+.gsign.g1 { left: 50%; top: 22%; transform: translateX(-50%); }
+.gsign.g2 { left: 50%; top: 18%; transform: translateX(-50%); }
+.gsign.g3 { left: 50%; bottom: 96px; transform: translateX(-50%); }
+/* each sign points at the control or station it teaches, not just at the map */
+.gsign .sign::after {
+  content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px;
+  border: 6px solid transparent; border-top-color: #12233f;
+}
+.gsign.g1 .sign::after, .gsign.g2 .sign::after { border-top-color: #12233f; }
 .sign {
   position: relative; pointer-events: auto;
   background: #12233f; color: #eef3fa; border-radius: 9px;
@@ -521,40 +583,62 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 @keyframes nudge { 0%, 100% { box-shadow: 0 3px 8px rgba(15, 78, 158, 0.35); } 50% { box-shadow: 0 0 0 7px rgba(15, 78, 158, 0.28); } }
 @media (prefers-reduced-motion: reduce) { .dock .play.nudge { animation: none; box-shadow: 0 0 0 3px rgba(15, 78, 158, 0.4); } }
 
+/* the grab rail — mobile sheet handle (hidden on desktop) */
+.inspector .grab {
+  display: none;
+}
+@media (max-width: 720px) {
+  .inspector .grab {
+    display: block; position: sticky; top: 0; z-index: 2;
+    width: 100%; height: 22px; margin: -14px 0 4px; padding: 0;
+    background: var(--paper); border-radius: 14px 14px 0 0;
+  }
+  .inspector .grab::after {
+    content: ''; position: absolute; left: 50%; top: 7px; margin-left: -18px;
+    width: 36px; height: 5px; border-radius: 3px; background: #c3ccda;
+  }
+  .stage.night .inspector .grab { background: #131a25; }
+  .stage.night .inspector .grab::after { background: #3a4a61; }
+}
+
 /* ============================ mobile ============================ */
 @media (max-width: 720px) {
-  .titleblock { top: 12px; right: 14px; }
-  .titleblock h1 { font-size: 24px; }
-  .titleblock p { display: none; }
-  .localpill { margin-top: 5px; }
+  .maptools { top: 12px; left: 12px; }
+  .maptools button { width: 42px; height: 42px; }
+  .followpill { bottom: 130px; }
 
-  .key { left: 10px; top: 96px; bottom: auto; width: min(300px, calc(100vw - 20px)); }
+  .key { left: 10px; top: 62px; bottom: auto; width: min(300px, calc(100vw - 20px)); }
   .key.shut { transform: none; }
   .keybody { max-height: 34vh; }
 
   .inspector {
-    top: auto; left: 10px; right: 10px; bottom: 118px; width: auto;
-    max-height: 48vh; border-radius: 14px;
+    top: auto; left: 10px; right: 10px; bottom: 122px; width: auto;
+    max-height: 30vh; border-radius: 14px;
+    transition: max-height 0.3s var(--ease);
   }
-  .hint { bottom: auto; top: 64px; font-size: 10px; max-width: calc(100vw - 32px); white-space: normal; text-align: center; }
+  .inspector.full { max-height: 62vh; }
+  .hint { bottom: auto; top: 62px; font-size: 10px; max-width: calc(100vw - 32px); white-space: normal; text-align: center; }
 
   .dock {
     left: 10px; right: 10px; bottom: 10px; transform: none;
-    max-width: none; gap: 6px; padding: 7px 10px; flex-wrap: wrap; justify-content: center;
+    max-width: none; gap: 8px; padding: 8px 10px; flex-wrap: wrap; justify-content: center;
   }
+  /* fingertip targets — every ride control is at least 34px tall */
+  .dock button { min-height: 34px; min-width: 34px; }
+  .dock .play { min-width: 46px; min-height: 46px; }
+  .dock .speeds button { min-height: 26px; min-width: 30px; }
   /* two rows: controls up top, the next-stop board takes the full width */
   .dock .rideinfo { order: 10; flex-basis: 100%; min-width: 0; max-width: none; }
   .dock .fare { display: flex; flex-direction: row; align-items: baseline; gap: 3px; border: 0; padding: 0 2px; min-width: 0; }
   .dock .fare b { font-size: 12px; }
   .speeds { flex-direction: row; }
+  .keyfoot button { min-height: 36px; }
+  .finder li { min-height: 44px; }
   @keyframes rise { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 }
 
 /* one thing at a time: the guide sign steps aside while a detail is open */
-.stage.selopen .gsign.g2 { visibility: hidden; }
-@media (max-width: 720px) {
-  .stage.selopen .gsign { display: none; }
-}
+.stage.selopen .gsign { visibility: hidden; }
 
 /* ============ night service extends to the chrome ============ */
 .stage.night .key, .stage.night .inspector, .stage.night .finder {
@@ -599,6 +683,41 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .stage.night .dock .fare span { color: #5f7394; }
 .stage.night .dock .rideprog::before { background: #232f40; }
 .stage.night .dock .rideprog i { background: #ffd97a; }
+.stage.night .dock .progthumb { border-color: #ffd97a; }
 .stage.night .dock .speeds button.on { background: #e8eef7; color: #131a25; }
-.stage.night .titleblock h1 { color: #e8eef7; }
-.stage.night .titleblock p { color: #7e90a8; }
+.stage.night .maptools button { background: #131a25; border-color: #273242; color: #8898ae; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5); }
+.stage.night .maptools button:hover { color: #ffd97a; border-color: #3a4a61; }
+.stage.night .keyfoot button { background: #1a2331; border-color: #34415a; color: #cdd9e8; }
+.stage.night .keyfoot button:hover { border-color: #5f7394; }
+.stage.night .demopill { background: #33290f; color: #d9b45f; border-color: #4a3d16; }
+.stage.night .svc:hover, .stage.night .svc:active,
+.stage.night .keyhead:active, .stage.night .keyrow:active,
+.stage.night .xferrow:active, .stage.night .callhead:active { background: #1a2331; }
+.stage.night .svc { border-bottom-color: #1e2937; }
+.stage.night .keyrow, .stage.night .keyfoot { border-top-color: #273242; }
+.stage.night .keyrow b, .stage.night .keyrow span, .stage.night .keyrow i { color: #8898ae; }
+.stage.night .srclist code { color: #b9c8da; }
+.stage.night .srclist span { color: #5f7394; }
+.stage.night .finderwrap { background: rgba(10, 14, 20, 0.55); }
+.stage.night .findhead { border-bottom-color: #273242; }
+.stage.night .findhead > span { color: #ffd97a; }
+.stage.night .findhead input { color: #e8eef7; }
+.stage.night .findhead kbd { border-color: #34415a; color: #8898ae; }
+.stage.night .finder li.hit, .stage.night .finder li:active { background: #1e2937; }
+.stage.night .finder li b { color: #e8eef7; }
+.stage.night .finder li span { color: #8898ae; }
+.stage.night .tip { background: #131a25; border-color: #273242; }
+.stage.night .tip b { color: #e8eef7; }
+.stage.night .tip span { color: #8898ae; }
+.stage.night .followpill { background: rgba(19, 26, 37, 0.95); }
+
+/* one reduced-motion policy, applied to every effect */
+@media (prefers-reduced-motion: reduce) {
+  .hint, .gsign, .finder, .dock, .key, .pin, .followpill, .inspector,
+  .led b, .gsign .sign, .maptools button { animation: none !important; }
+  .plano.arrived .track, .plano.arrived .st { animation: none; }
+  .plano.fresh .track, .plano.fresh .st, .plano.fresh .lb,
+  .plano.fresh .nameboard, .plano.fresh .works, .plano.fresh .zone { animation: none; }
+  .rideprog i, .progthumb, .zone, .track { transition-duration: 0.01s; }
+  .inspector { transition: none; }
+}

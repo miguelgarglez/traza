@@ -53,6 +53,13 @@ export default function App() {
   const [finder, setFinder] = useState(false)
   const switchFired = useRef(new Set<string>())
   const [guide, setGuide] = useState(0) // 0 off, 1 drag, 2 interchange, 3 ride
+  // ride camera follow: any manual gesture suspends it until resumed
+  const [follow, setFollow] = useState(true)
+  const followRef = useRef(true)
+  const setFollowOn = (v: boolean) => {
+    followRef.current = v
+    setFollow(v)
+  }
 
   // first run: platform-sign guide, three learn-by-doing steps
   useEffect(() => {
@@ -206,10 +213,11 @@ export default function App() {
         }
       })
       if (rp.dist >= leg.len) {
-        // arrived at leg.stop
+        // arrived at leg.stop — keep the approach heading; nothing teleports
+        const end = legPoint(leg, leg.len)
         rp.leg += 1
         rp.dist = 0
-        rp.dwell = 150
+        rp.dwell = 190
         const arrived = leg.stop
         setSel(arrived.id)
         setRideUi({
@@ -218,8 +226,8 @@ export default function App() {
           name: arrived.name,
           next: ride.legs[rp.leg]?.stop.name ?? 'terminus',
         })
-        map.current?.setTrain(arrived.x, arrived.y, 0, true, lineColorOf(net, arrived.lineId))
-        map.current?.keepInView(arrived.x, arrived.y)
+        map.current?.setTrain(arrived.x, arrived.y, end.angle, true, lineColorOf(net, arrived.lineId))
+        if (followRef.current) map.current?.keepInView(arrived.x, arrived.y)
         try {
           navigator.vibrate?.(6)
         } catch {
@@ -227,6 +235,7 @@ export default function App() {
         }
         if (rp.leg >= ride.legs.length) {
           setPlaying(false)
+          map.current?.terminusGlow()
           setRideUi({
             stop: ride.stops.length,
             total: ride.stops.length,
@@ -238,7 +247,7 @@ export default function App() {
       } else {
         const p = legPoint(leg, rp.dist)
         map.current?.setTrain(p.x, p.y, p.angle, true, lineColorOf(net, leg.stop.lineId))
-        map.current?.keepInView(p.x, p.y)
+        if (followRef.current) map.current?.keepInView(p.x, p.y)
       }
       raf = requestAnimationFrame(tick)
     }
@@ -253,10 +262,13 @@ export default function App() {
       const k = Math.max(0, Math.min(ride.stops.length - 1, stopIdx))
       rideRef.current = { leg: Math.min(k, ride.legs.length - 1), dist: 0, dwell: 0 }
       switchFired.current.clear()
+      setFollowOn(true)
       const stop = ride.stops[k]!
       setSel(stop.id)
       setRideUi({ stop: k + 1, total: ride.stops.length, name: stop.name, next: ride.stops[k + 1]?.name ?? 'terminus' })
-      map.current?.setTrain(stop.x, stop.y, 0, true, lineColorOf(net, stop.lineId))
+      const prev = ride.legs[k - 1]
+      const heading = prev ? legPoint(prev, prev.len).angle : 0
+      map.current?.setTrain(stop.x, stop.y, heading, true, lineColorOf(net, stop.lineId))
       map.current?.flyTo(stop.x, stop.y, 700, 420)
     },
     [ride, net],
@@ -427,7 +439,7 @@ export default function App() {
           if (!playing && rideRef.current.leg >= ride.legs.length) rideTo(0)
           setPlaying((p) => !p)
         }
-        if (guide === 3) guideDone()
+        if (guide) guideDone()
       } else if (k === '[' && ride && rideUi) rideTo(rideUi.stop - 2)
       else if (k === ']' && ride && rideUi) rideTo(rideUi.stop)
     }
@@ -451,22 +463,56 @@ export default function App() {
           sel={sel}
           onPick={(id) => {
             setSel(id)
-            if (id) seen()
-            if (guide === 2) setGuide(3)
+            if (id) {
+              seen()
+              // one thing at a time: the sheet owns the small screen
+              if (innerWidth <= 720) setKeyOpen(false)
+            }
+            if (guide === 2 || guide === 1) setGuide(3)
           }}
-          onPickWorks={(w: Works) => setSel(w.id)}
+          onPickWorks={(w: Works) => {
+            setSel(w.id)
+            if (innerWidth <= 720) setKeyOpen(false)
+            if (guide === 2 || guide === 1) setGuide(3)
+          }}
           riding={playing}
           solo={solo ?? (playing && ride ? ride.corridorIdx : null)}
           onUserPan={() => guide === 1 && setGuide(2)}
+          onUserGesture={() => setFollowOn(false)}
         />
       )}
 
-      {/* title block — cartographer's imprint, top right */}
-      <header className="titleblock">
-        <h1>traza</h1>
-        <p>the metro map of your agent sessions</p>
-        <span className="localpill">local only · nothing leaves this machine</span>
-      </header>
+      {/* wordmark lives inside the plano (the headboard) — the DOM only
+          carries it for assistive tech and document title semantics */}
+      <h1 className="sr">traza — the metro map of your agent sessions</h1>
+
+      {/* map tools — visible affordances for what the keys also do */}
+      {net && (
+        <div className="maptools">
+          <button aria-label="find a station ( / )" title="find a station" onClick={() => setFinder(true)}>
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+              <circle cx="7" cy="7" r="4.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+              <line x1="10.4" y1="10.4" x2="14" y2="14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            aria-label="fit the whole plano ( f )"
+            title="fit the whole plano"
+            onClick={() => map.current?.fit()}
+          >
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+              <path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* follow suspended by a gesture — a small way back onto the train */}
+      {playing && !follow && (
+        <button className="followpill" onClick={() => setFollowOn(true)}>
+          follow the train ▸
+        </button>
+      )}
 
       {/* key — service legend, bottom left */}
       {net && (
@@ -551,8 +597,11 @@ export default function App() {
             className={`play${playing ? ' on' : ''}${guide === 3 ? ' nudge' : ''}`}
             onClick={() => {
               if (!playing && rideRef.current.leg >= ride.legs.length) rideTo(0)
+              // a departure beat: the train dwells while the headlight ignites
+              if (!playing && !reduced) rideRef.current.dwell = 480
+              setFollowOn(true)
               setPlaying(!playing)
-              if (guide === 3) guideDone()
+              if (guide) guideDone()
             }}
             aria-label={playing ? 'pause the ride' : 'ride the line'}
           >
@@ -562,27 +611,20 @@ export default function App() {
           <div className="rideinfo">
             <div className="led">
               <span>{rideUi.stop >= rideUi.total ? 'terminus' : 'next'}</span>
-              <b>{rideUi.next}</b>
+              <b key={rideUi.next}>{rideUi.next}</b>
             </div>
-            <div
-              className="rideprog"
-              role="slider"
-              aria-label="ride progress"
-              aria-valuenow={rideUi.stop}
-              aria-valuemax={rideUi.total}
-              onPointerDown={(e) => {
-                const r = e.currentTarget.getBoundingClientRect()
-                rideTo(Math.round(((e.clientX - r.left) / r.width) * rideUi.total) - 1)
-              }}
-            >
-              <i style={{ width: `${(rideUi.stop / rideUi.total) * 100}%` }} />
-            </div>
+            <RideProg
+              stop={rideUi.stop}
+              total={rideUi.total}
+              names={ride.stops.map((s) => s.name)}
+              onSeek={rideTo}
+            />
             <span className="ridesub">
               {rideUi.name} · {rideUi.stop}/{rideUi.total}
             </span>
           </div>
           <div className="fare" title="tokens spent so far on this service">
-            <b key={rideUi.stop}>{fmtK(fares[rideUi.stop - 1] ?? 0)}</b>
+            <FareMeter value={fares[rideUi.stop - 1] ?? 0} reduced={reduced} />
             <span>tok</span>
           </div>
           <div className="speeds">
@@ -608,8 +650,9 @@ export default function App() {
         />
       )}
 
-      {/* first-run guide — hanging platform signs, learn by doing */}
-      {guide > 0 && (
+      {/* first-run guide — hanging platform signs, learn by doing.
+          The ride supersedes it: pressing play ends the tour. */}
+      {guide > 0 && !playing && (
         <div className={`gsign g${guide}`} role="note">
           <div className="sign">
             <b>{guide === 1 ? 'every station is a step the agent took' : guide === 2 ? 'a branch peeled off — a subagent ran alongside' : 'ride the line'}</b>
@@ -701,6 +744,82 @@ function fmtK(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
   return String(n)
+}
+
+/** fare meter — counts up to the cumulative token spend, never remounts */
+function FareMeter({ value, reduced }: { value: number; reduced: boolean }) {
+  const [shown, setShown] = useState(value)
+  const disp = useRef(value)
+  useEffect(() => {
+    const start = disp.current
+    if (start === value || reduced) {
+      disp.current = value
+      setShown(value)
+      return
+    }
+    const t0 = performance.now()
+    const dur = Math.min(560, 160 + Math.abs(value - start) / 500)
+    let raf = 0
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / dur)
+      const v = Math.round(start + (value - start) * (1 - Math.pow(1 - p, 3)))
+      disp.current = v
+      setShown(v)
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [value, reduced])
+  return <b>{fmtK(shown)}</b>
+}
+
+/** progress slider — drag to scrub with a station preview, arrows when focused */
+function RideProg({ stop, total, names, onSeek }: { stop: number; total: number; names: string[]; onSeek: (i: number) => void }) {
+  const [preview, setPreview] = useState<number | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const stopAt = (clientX: number) => {
+    const r = ref.current!.getBoundingClientRect()
+    return Math.max(0, Math.min(total - 1, Math.round(((clientX - r.left) / r.width) * total) - 1))
+  }
+  return (
+    <div
+      ref={ref}
+      className="rideprog"
+      role="slider"
+      aria-label="ride progress — drag to scrub"
+      aria-valuemin={1}
+      aria-valuenow={stop}
+      aria-valuemax={total}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft') (e.preventDefault(), e.stopPropagation(), onSeek(stop - 2))
+        else if (e.key === 'ArrowRight') (e.preventDefault(), e.stopPropagation(), onSeek(stop))
+      }}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        const i = stopAt(e.clientX)
+        setPreview(i)
+        onSeek(i)
+      }}
+      onPointerMove={(e) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+        const i = stopAt(e.clientX)
+        setPreview(i)
+        onSeek(i)
+      }}
+      onPointerUp={() => setPreview(null)}
+      onPointerCancel={() => setPreview(null)}
+      onLostPointerCapture={() => setPreview(null)}
+    >
+      <i style={{ width: `${(stop / total) * 100}%` }} />
+      <b className="progthumb" style={{ left: `${(stop / total) * 100}%` }} />
+      {preview != null && (
+        <span className="progprev" style={{ left: `${((preview + 1) / total) * 100}%` }}>
+          {names[preview]}
+        </span>
+      )}
+    </div>
+  )
 }
 
 /** "Where to?" — citymapper-style station finder over names, actors and tools. */

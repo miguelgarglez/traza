@@ -12,6 +12,8 @@ export interface MapHandle {
   keepInView: (x: number, y: number) => void
   /** flash the points-throw glyph at a junction the train is crossing */
   switchThrow: (x: number, y: number) => void
+  /** terminus reveal — the ridden line flares awake for a beat */
+  terminusGlow: () => void
   /** the idle ghost service — a dim train drifting the trunk */
   setGhost: (x: number, y: number, angle: number, visible: boolean, color?: string) => void
 }
@@ -27,6 +29,8 @@ interface Props {
   solo: number | null
   /** fired once per gesture when the user drags the plano (first-run guide) */
   onUserPan?: () => void
+  /** fired on every manual gesture (drag, wheel, pinch) — suspends ride follow */
+  onUserGesture?: () => void
 }
 
 const K_MIN = 0.02
@@ -53,7 +57,7 @@ function stationGlyph(s: Station, color: string, sel: boolean) {
   return <circle key={s.id} cx={s.x} cy={s.y} r={2.3} fill={color} />
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, onUserPan }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, onUserPan, onUserGesture }, ref) {
   const svgRef = useRef<SVGSVGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
   const trainRef = useRef<SVGGElement>(null)
@@ -81,6 +85,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   const pinch = useRef<{ d: number; k: number } | null>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const reduced = useMemo(() => matchMedia('(prefers-reduced-motion: reduce)').matches, [])
+  const gestureRef = useRef(onUserGesture)
+  gestureRef.current = onUserGesture
 
   const apply = () => {
     const g = worldRef.current
@@ -91,6 +97,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     // scale stays on the world group so vectors re-raster crisp only on zoom
     svg.style.transform = `translate(${x}px, ${y}px)`
     g.setAttribute('transform', `scale(${k})`)
+    g.style.setProperty('--k', String(k))
     svg.dataset.z = k < 0.18 ? 'far' : k < 0.7 ? 'mid' : 'near'
     // reposition the tip imperatively — a setState here would re-render
     // the whole network every camera frame
@@ -111,15 +118,36 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     return { wx: (px - x) / k, wy: (py - y) / k }
   }
 
+  // the part of the wrap not covered by floating chrome — camera fits and
+  // ride-follow compose inside this rect, so open panels never hide the map
+  const viewRect = () => {
+    const wrap = svgRef.current?.parentElement
+    const r = (wrap ?? svgRef.current!).getBoundingClientRect()
+    let right = 0
+    let bottom = 0
+    const insp = document.querySelector('.inspector')
+    if (insp) {
+      const ir = insp.getBoundingClientRect()
+      // desktop sidebar eats the right edge; the mobile sheet eats the bottom
+      if (ir.width > r.width * 0.55) bottom = Math.max(bottom, r.height - ir.top + 8)
+      else right = Math.max(right, r.width - ir.left + 8)
+    }
+    const dock = document.querySelector('.dock')
+    if (dock) bottom = Math.max(bottom, r.height - dock.getBoundingClientRect().top + 8)
+    return { w: r.width, h: r.height, right, bottom }
+  }
+
   const fitTo = (x0: number, y0: number, x1: number, y1: number, animate = false) => {
     const svg = svgRef.current
     if (!svg) return
-    const r = svg.getBoundingClientRect()
+    const v = viewRect()
+    const aw = Math.max(1, v.w - v.right)
+    const ah = Math.max(1, v.h - v.bottom)
     const w = Math.max(1, x1 - x0)
     const h = Math.max(1, y1 - y0)
-    const k = Math.min(r.width / w, r.height / h, K_MAX) * 0.92
-    const tx = r.width / 2 - ((x0 + x1) / 2) * k
-    const ty = r.height / 2 - ((y0 + y1) / 2) * k
+    const k = Math.min(aw / w, ah / h, K_MAX) * 0.92
+    const tx = aw / 2 - ((x0 + x1) / 2) * k
+    const ty = ah / 2 - ((y0 + y1) / 2) * k
     const target = { x: tx, y: ty, k: Math.max(K_MIN, k) }
     if (!animate || reduced) {
       cam.current = target
@@ -179,19 +207,21 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     keepInView: (wx, wy) => {
       const svg = svgRef.current
       if (!svg) return
-      const r = svg.getBoundingClientRect()
+      const v = viewRect()
       const { px, py } = toScreen(wx, wy)
-      const mx = r.width * 0.18
-      const my = r.height * 0.2
-      // an open inspector reserves the right edge — the followed station
-      // should stay visible beside it, not slide underneath
-      const rightPad = sel ? Math.min(340, r.width * 0.3) : 0
+      const aw = v.w - v.right
+      const ah = v.h - v.bottom
+      // while riding, the train sits in the left third so track ahead
+      // — forks, the next interchange — is composed into the frame
+      const lo = riding ? aw * 0.24 : aw * 0.16
+      const hi = riding ? aw * 0.55 : aw * 0.84
+      const my = ah * 0.18
       let tx = 0
       let ty = 0
-      if (px < mx) tx = mx - px
-      else if (px > r.width - mx - rightPad) tx = r.width - mx - rightPad - px
+      if (px < lo) tx = lo - px
+      else if (px > hi) tx = hi - px
       if (py < my) ty = my - py
-      else if (py > r.height - my) ty = r.height - my - py
+      else if (py > ah - my) ty = ah - my - py
       if (tx || ty) {
         cam.current.x += tx * 0.12 // eased follow — never snaps
         cam.current.y += ty * 0.12
@@ -205,6 +235,14 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       g.classList.remove('live')
       void g.getBoundingClientRect() // restart the animation
       g.classList.add('live')
+    },
+    terminusGlow: () => {
+      const svg = svgRef.current
+      if (!svg) return
+      svg.classList.remove('arrived')
+      void svg.getBoundingClientRect()
+      svg.classList.add('arrived')
+      setTimeout(() => svg.classList.remove('arrived'), 2600)
     },
     setGhost: (wx, wy, angle, visible, color) => {
       const g = ghostRef.current
@@ -224,10 +262,34 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }
 
   // initial fit once the net changes; the plano "lays track" for a moment.
-  // Open on the first service — the whole network is a zoom-out away ('f').
+  // Open on a readable neighborhood of the first service — a screenful of
+  // trunk at k≈1, headboard included — not the whole service shrunk thin.
+  // The whole network is a zoom-out away ('f' / the fit button).
   useEffect(() => {
-    const b = corridorBounds[0] ?? net.bounds
-    fitTo(b.x0 - 30, b.y0 - U * 0.7, b.x1 + 30, b.y1 + U * 0.7, false)
+    const c0 = net.corridors[0]
+    const trunk = c0?.lines.find((l) => l.trunk)
+    const s0 = trunk?.stations[0]
+    if (!c0 || !trunk || !s0) {
+      fitTo(net.bounds.x0, net.bounds.y0, net.bounds.x1, net.bounds.y1, false)
+    } else {
+      const v = viewRect()
+      const hbX = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 252
+      const wSpan = Math.max(460, (v.w - v.right) / 0.85)
+      const x0 = Math.min(hbX, s0.x - P * 2.2)
+      const x1 = Math.min(corridorBounds[0]!.geo.x1 + 30, s0.x + wSpan)
+      // vertical extent of everything inside that x-window
+      let y0 = c0.trunkY - U * 1.05 // the headboard hangs above the nameboard
+      let y1 = c0.trunkY + U * 0.8
+      for (const l of c0.lines) {
+        for (const s of l.stations)
+          if (s.x >= x0 - U && s.x <= x1 + U) { y0 = Math.min(y0, s.y); y1 = Math.max(y1, s.y) }
+        for (const sg of l.segs)
+          for (const p of sg.pts)
+            if (p.x >= x0 - U && p.x <= x1 + U) { y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y) }
+      }
+      for (const w of c0.works) if (w.x >= x0 && w.x <= x1) { y0 = Math.min(y0, w.y); y1 = Math.max(y1, w.y) }
+      fitTo(x0, y0 - U * 0.4, x1, y1 + U * 0.5, false)
+    }
     setFresh(!reduced)
     const t = setTimeout(() => setFresh(false), 2600)
     return () => clearTimeout(t)
@@ -240,6 +302,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     let panIdle: ReturnType<typeof setTimeout> | undefined
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
+      // a gesture always wins over a camera flight and suspends ride-follow
+      if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
+      gestureRef.current?.()
       svg.dataset.pan = '1'
       clearTimeout(panIdle)
       panIdle = setTimeout(() => delete svg.dataset.pan, 160)
@@ -262,6 +327,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       const [a, b] = [...pointers.current.values()] as [{ x: number; y: number }, { x: number; y: number }]
       pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), k: cam.current.k }
       drag.current = null
+      onUserGesture?.()
     } else {
       drag.current = { px: e.clientX, py: e.clientY, cx: cam.current.x, cy: cam.current.y, moved: false }
     }
@@ -288,6 +354,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       if (!dg.moved && Math.hypot(dx, dy) > 4) {
         dg.moved = true
         onUserPan?.()
+        onUserGesture?.()
       }
       if (dg.moved) {
         if (!dg.panning) {
@@ -333,7 +400,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     setHover({ s, px, py })
   }
 
-  // per-corridor extents — zones hug their service, not the whole map
+  // per-corridor extents — `geo` is drawn geometry only (camera fits to it),
+  // `full` adds the service nameboard so zones hang behind their signage too
   const corridorBounds = useMemo(() => {
     return net.corridors.map((c) => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
@@ -346,11 +414,15 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       }
       for (const w of c.works) eat(w)
       for (const lb of c.labels) eat(lb)
+      if (!isFinite(x0)) {
+        const z = { x0: 0, y0: c.y0, x1: 400, y1: c.y0 + c.height }
+        return { geo: z, full: z }
+      }
+      const geo = { x0, y0, x1, y1 }
       const trunk = c.lines.find((l) => l.trunk)
       const s0 = trunk?.stations[0]
-      if (trunk && s0) x0 = Math.min(x0, s0.x - P * 1.9 - 40 - trunk.service.length * 6.4)
-      if (!isFinite(x0)) return { x0: 0, y0: c.y0, x1: 400, y1: c.y0 + c.height }
-      return { x0, y0, x1, y1 }
+      const fx0 = trunk && s0 ? Math.min(x0, s0.x - P * 1.9 - 40 - trunk.service.length * 6.4) : x0
+      return { geo, full: { x0: fx0, y0, x1, y1 } }
     })
   }, [net])
 
@@ -395,20 +467,24 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
           </radialGradient>
         </defs>
         <g ref={worldRef} className="world">
-          {/* zone bands behind each corridor */}
-          {net.corridors.map((c, i) => (
-            <rect
-              key={`z${i}`}
-              className="zone"
-              data-ci={i}
-              style={{ ...fade, opacity: dim(i) }}
-              x={corridorBounds[i]!.x0 - 26}
-              y={c.y0 - U * 0.45}
-              width={corridorBounds[i]!.x1 - corridorBounds[i]!.x0 + 52}
-              height={c.height - U * 0.35}
-              rx={26}
-            />
-          ))}
+          {/* zone bands behind each corridor — hug the drawn geometry */}
+          {net.corridors.map((_c, i) => {
+            const fb = corridorBounds[i]!.full
+            const gb = corridorBounds[i]!.geo
+            return (
+              <rect
+                key={`z${i}`}
+                className="zone"
+                data-ci={i}
+                style={{ ...fade, opacity: dim(i) }}
+                x={fb.x0 - 26}
+                y={gb.y0 - 22}
+                width={fb.x1 - fb.x0 + 52}
+                height={gb.y1 - gb.y0 + 44}
+                rx={26}
+              />
+            )
+          })}
           {/* tracks */}
           {net.corridors.map((c, ci) =>
             c.lines.map((l, li) => (
@@ -472,8 +548,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
                 {l.stations.map((s) => (
                   <g key={s.id} className={`st st-${s.tier[0]}`} data-sid={s.id}>
                     {stationGlyph(s, l.color, sel === s.id)}
-                    {/* fat invisible hit target */}
-                    <circle cx={s.x} cy={s.y} r={11} fill="transparent" data-sid={s.id} />
+                    {/* fat invisible hit target — radius scales with --k so it
+                        stays ~12px on screen when the plano is zoomed out */}
+                    <circle className="hit" cx={s.x} cy={s.y} r={11} fill="transparent" data-sid={s.id} />
                   </g>
                 ))}
               </g>
@@ -528,6 +605,28 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               </text>
             )),
           )}
+          {/* system headboard — the map's own title plate, drawn into the
+              plano like a real map's imprint instead of floating chrome */}
+          {(() => {
+            const c0 = net.corridors[0]
+            const trunk = c0?.lines.find((l) => l.trunk)
+            const s0 = trunk?.stations[0]
+            if (!trunk || !s0) return null
+            const bx = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 252
+            const by = c0!.trunkY - U * 0.95
+            return (
+              <g className="headboard" data-ci={0} style={{ ...fade, opacity: dim(0) }} transform={`translate(${bx} ${by})`}>
+                <line x1={30} y1={-30} x2={30} y2={0} />
+                <line x1={222} y1={-30} x2={222} y2={0} />
+                <rect width={252} height={78} rx={10} />
+                <text className="hb-name" x={18} y={36}>traza</text>
+                <rect x={18} y={46} width={24} height={4.5} rx={2.2} fill="#0F4E9E" />
+                <rect x={46} y={46} width={13} height={4.5} rx={2.2} fill="#E2001A" />
+                <rect x={63} y={46} width={18} height={4.5} rx={2.2} fill="#6BBE45" />
+                <text className="hb-sub" x={18} y={68}>the metro map of agent sessions · local only</text>
+              </g>
+            )
+          })()}
           {/* service nameboards at each trunk's left terminus */}
           {net.corridors.map((c, i) => {
             const trunk = c.lines.find((l) => l.trunk)

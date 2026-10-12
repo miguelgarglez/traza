@@ -74,13 +74,16 @@ function mergesAt(corridor: Corridor, s: Station): Line[] {
 }
 
 export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Props) {
+  // mobile: tap the grab rail to swap compact ↔ expanded sheet heights
+  const [full, setFull] = useState(false)
   const hit = sel ? find(net, sel) : null
   if (!hit) return null
 
   if (hit.kind === 'works') {
     const w = hit.w
     return (
-      <aside className="inspector" aria-label="closed works detail">
+      <aside className={`inspector${full ? ' full' : ''}`} aria-label="closed works detail">
+        <button className="grab" onClick={() => setFull((f) => !f)} aria-label={full ? 'shrink details' : 'expand details'} />
         <header>
           <span className="wbox-lg">{w.count > 9 ? '9+' : w.count}</span>
           <div>
@@ -107,7 +110,8 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
   const svc = line.trunk ? `S${net.corridors.indexOf(corridor) + 1}` : line.service
 
   return (
-    <aside className="inspector" aria-label="station detail">
+    <aside className={`inspector${full ? ' full' : ''}`} aria-label="station detail">
+      <button className="grab" onClick={() => setFull((f) => !f)} aria-label={full ? 'shrink details' : 'expand details'} />
       <header>
         <span className="stopdot" style={{ borderColor: line.color }} />
         <div>
