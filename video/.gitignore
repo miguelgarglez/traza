@@ -1,0 +1,6 @@
+.hyperframes/
+.media/
+snapshots/
+renders/
+*.webm
+node_modules/

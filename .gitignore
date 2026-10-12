@@ -6,3 +6,4 @@ dist-single/
 .vercel
 test/out/
 tsconfig.tsbuildinfo
+.env*

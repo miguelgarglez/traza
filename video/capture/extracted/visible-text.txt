@@ -1,0 +1,42 @@
+[tspan] system · stop 1
+[tspan] workspace: ~/work/lantern…
+[tspan] user · stop 2
+[tspan] Check the new posters gri…
+[tspan] agent · stop 15
+[tspan] Build is green. Now the p…
+[tspan] agent · stop 7
+[tspan] Now the markup — a named…
+[tspan] user · stop 2
+[tspan] Build the project and rep…
+[tspan] agent · stop 6
+[tspan] Done — --check is the doc…
+[tspan] user · stop 1
+[tspan] rename the --dry flag to…
+[tspan] system · stop 4
+[tspan] assistant
+[tspan] user · stop 1
+[tspan] user
+[tspan] user · stop 3
+[tspan] user
+[text] traza
+[text] the metro map of agent sessions · local only
+[text] posters: editorial print grid + plate panel
+[text] codex · palette
+[text] vignette banding fix
+[h1] traza — the metro map of your agent sessions
+[span] traza
+[span] open
+[span] agent-session exports · files stay local
+[b] key
+[span] stops ·
+[span] lines
+[span] · 2 works
+[span] next
+[b] You are Devin, an interac…
+[span] workspace: ~/work/lantern… · 1/36
+[span] tok
+[b] every station is a step the agent took
+[p] drag the plano to look around
+[span] step
+[span] of 3
+[button] skip the tour

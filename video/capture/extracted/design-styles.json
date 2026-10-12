@@ -1,0 +1,183 @@
+{
+  "typography": [
+    {
+      "role": "display",
+      "fontFamily": "Fira Sans",
+      "fontSize": "32px",
+      "fontWeight": "700",
+      "lineHeight": "normal",
+      "letterSpacing": "normal",
+      "color": "#1C2733",
+      "sampleText": "traza — the metro map of your agent sessions"
+    },
+    {
+      "role": "label",
+      "fontFamily": "Fira Sans",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "lineHeight": "normal",
+      "letterSpacing": "normal",
+      "color": "#1C2733",
+      "sampleText": "22system · stop 1workspace: ~/work/lantern…user · stop 2Chec"
+    },
+    {
+      "role": "body",
+      "fontFamily": "Fira Sans Condensed",
+      "fontSize": "12px",
+      "fontWeight": "500",
+      "lineHeight": "normal",
+      "letterSpacing": "normal",
+      "color": "#A9BCD6",
+      "sampleText": "drag the plano to look around"
+    }
+  ],
+  "spacing": {
+    "observed": [
+      1,
+      2,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      14
+    ],
+    "baseUnit": 4
+  },
+  "radius": [
+    "5px",
+    "8px",
+    "10px"
+  ],
+  "shadows": [
+    {
+      "value": "rgba(16, 30, 50, 0.05) 0px 1px 2px 0px, rgba(16, 30, 50, 0.09) 0px 10px 28px 0px",
+      "count": 5
+    },
+    {
+      "value": "rgba(15, 78, 158, 0.35) 0px 3px 8px 0px",
+      "count": 1
+    },
+    {
+      "value": "rgba(0, 0, 0, 0.6) 0px 1px 3px 0px inset",
+      "count": 1
+    },
+    {
+      "value": "rgba(8, 16, 28, 0.35) 0px 8px 22px 0px, rgba(255, 255, 255, 0.09) 0px 0px 0px 1px inset",
+      "count": 1
+    }
+  ],
+  "buttons": [
+    {
+      "label": "open",
+      "background": "#FBFCFE",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#1C2733",
+      "padding": "0px 10px",
+      "borderRadius": "10px",
+      "border": "1px solid rgb(213, 220, 230)",
+      "boxShadow": "rgba(16, 30, 50, 0.05) 0px 1px 2px 0px, rgba(16, 30, 50, 0.09) 0px 10px 28px 0px",
+      "fontSize": "11px",
+      "fontWeight": "600",
+      "height": "36px"
+    },
+    {
+      "label": "key44 stops · 6 lines · 2 works▴",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#1C2733",
+      "padding": "10px 14px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(28, 39, 51)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "35px"
+    },
+    {
+      "label": "‹",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#5A6B80",
+      "padding": "1px 6px",
+      "borderRadius": "8px",
+      "border": "0px none rgb(90, 107, 128)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "700",
+      "height": "22px"
+    },
+    {
+      "label": "|◀",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#1C2733",
+      "padding": "1px 6px",
+      "borderRadius": "8px",
+      "border": "0px none rgb(28, 39, 51)",
+      "boxShadow": "none",
+      "fontSize": "9px",
+      "fontWeight": "400",
+      "height": "26px"
+    },
+    {
+      "label": "▶",
+      "background": "#0F4E9E",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FFFFFF",
+      "padding": "1px 6px 1px 2px",
+      "borderRadius": "50%",
+      "border": "0px none rgb(255, 255, 255)",
+      "boxShadow": "rgba(15, 78, 158, 0.35) 0px 3px 8px 0px",
+      "fontSize": "13px",
+      "fontWeight": "400",
+      "height": "40px"
+    },
+    {
+      "label": "1×",
+      "background": "#1C2733",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FFFFFF",
+      "padding": "2px 7px",
+      "borderRadius": "5px",
+      "border": "0px none rgb(255, 255, 255)",
+      "boxShadow": "none",
+      "fontSize": "9px",
+      "fontWeight": "700",
+      "height": "14px"
+    }
+  ],
+  "cards": [],
+  "nav": null,
+  "chips": [
+    {
+      "label": "S1",
+      "background": "#0F4E9E",
+      "color": "#FFFFFF",
+      "padding": "0px 5px",
+      "borderRadius": "5px",
+      "border": "0px none rgb(255, 255, 255)",
+      "boxShadow": "none",
+      "fontSize": "10.5px",
+      "fontWeight": "700",
+      "height": "20px"
+    }
+  ],
+  "statCells": [],
+  "tabs": [],
+  "backgrounds": [
+    {
+      "value": "linear-gradient(rgb(44, 62, 86), rgb(44, 62, 86)), linear-gradient(rgb(58, 77, 104), rgb(58, 77, 104)), linear-gradient(rgb(58, 77, 104), rgb(58, 77, 104))",
+      "area": 20950
+    }
+  ],
+  "glass": []
+}
