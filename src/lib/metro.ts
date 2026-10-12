@@ -475,9 +475,12 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
   }
 
   // 4. Labels: majors get horizontal labels centered on the station,
-  // alternating above/below the line; collisions demote lod.
+  // alternating above/below the line; collisions demote lod. At reading
+  // zoom each label also earns an actor·stop sub-line on its free side —
+  // the collision box already reserves that strip so a title + sub pair
+  // can never tangle with a neighbor's.
   const labels: Label[] = []
-  const placed: { x0: number; x1: number; y: number }[] = []
+  const placed: { x0: number; x1: number; y0: number; y1: number }[] = []
   // slanted track pieces (45° forks/merges) are obstacles too — a name
   // must not sit under a crossing track
   const slants: { x0: number; y0: number; y1: number; dir: number }[] = []
@@ -489,12 +492,11 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
         if (Math.abs(b.y - a.y) > 4)
           slants.push({ x0: a.x, y0: a.y, y1: b.y, dir: (b.x - a.x) / (b.y - a.y) })
       }
-  const underTrack = (box: { x0: number; x1: number }, ly: number) =>
+  const underTrack = (box: { x0: number; x1: number; y0: number; y1: number }) =>
     slants.some((s) => {
       const lo = Math.min(s.y0, s.y1) - 4
       const hi = Math.max(s.y0, s.y1) + 4
-      // the slant's x at the label's vertical band (baseline −9..+3)
-      for (const yy of [ly - 9, ly - 3, ly + 3]) {
+      for (const yy of [box.y0 + 2, (box.y0 + box.y1) / 2, box.y1 - 2]) {
         if (yy < lo || yy > hi) continue
         const sx = s.x0 + (yy - s.y0) * s.dir
         if (sx > box.x0 - 8 && sx < box.x1 + 8) return true
@@ -517,14 +519,21 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
     let lod = s.tier === 'local' ? 2 : 0
     for (const off of offs) {
       const ly = s.y + off
-      const box = { x0: lx - w / 2, x1: lx + w / 2, y: ly }
+      // title glyph band ~[−9,+3] around the baseline; the sub-line hangs
+      // a further ~12 off the free side — reserve the whole occupied strip
+      const box = {
+        x0: lx - w / 2,
+        x1: lx + w / 2,
+        y0: side < 0 ? ly - 21 : ly - 9,
+        y1: side < 0 ? ly + 3 : ly + 15,
+      }
       // works badges are furniture a name must not cover either
       const badgeHit = works.some(
-        (wk) => Math.abs(wk.y - ly) < 16 && box.x0 < wk.x + 14 && box.x1 > wk.x - 14,
+        (wk) => wk.y > box.y0 - 8 && wk.y < box.y1 + 8 && box.x0 < wk.x + 14 && box.x1 > wk.x - 14,
       )
       if (
-        !placed.some((b) => Math.abs(b.y - ly) < 13 && !(box.x1 < b.x0 - 3 || box.x0 - 3 > b.x1)) &&
-        !underTrack(box, ly) &&
+        !placed.some((b) => !(box.y1 < b.y0 - 2 || box.y0 > b.y1 + 2) && !(box.x1 < b.x0 - 3 || box.x0 - 3 > b.x1)) &&
+        !underTrack(box) &&
         !badgeHit
       ) {
         placed.push(box)

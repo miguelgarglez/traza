@@ -708,25 +708,24 @@ export default function App() {
 
       {/* key — service legend, bottom left */}
       {net && (
-        <section className={keyOpen ? 'key' : 'key shut'} aria-label="service key">
+        /* the panel is 'shut' whenever its body isn't actually showing —
+           the class follows the render, not the user's stored toggle, so
+           the collapsed header can never clip its meta counts behind an
+           open-class layout */
+        <section className={keyOpen && landed && (guide !== 1 || keyPinned) ? 'key' : 'key shut'} aria-label="service key">
           <button
             className="keyhead"
             onClick={() => {
-              setKeyPinned(true)
-              setKeyOpen(!keyOpen)
+              if (keyOpen && landed && (guide !== 1 || keyPinned)) setKeyOpen(false)
+              else {
+                setKeyOpen(true)
+                setKeyPinned(true)
+              }
             }}
           >
             <b>key</b>
             <span>{net.stats.stations} stops · {net.stats.lines} lines{net.stats.works ? ` · ${net.stats.works} works` : ''}</span>
-            {ride && (
-              <em className="svcnow">
-                <i className="svcchip" style={{ background: net.corridors[ride.corridorIdx]?.lines.find((l) => l.trunk)?.color }}>
-                  S{ride.corridorIdx + 1}
-                </i>
-                <u>{net.corridors[ride.corridorIdx]?.session.title}</u>
-              </em>
-            )}
-            <i>{keyOpen ? '▾' : '▴'}</i>
+            <i>{keyOpen && landed && (guide !== 1 || keyPinned) ? '▾' : '▴'}</i>
           </button>
           {/* during the opening beat and the tour's first step the key
               stays a single row — the dive and the hanging sign own the
