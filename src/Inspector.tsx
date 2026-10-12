@@ -75,21 +75,25 @@ function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) 
         armed.current = true
         rail.setPointerCapture(e.pointerId)
         sheet.classList.add('dragging') // the sheet follows the finger — no transition
+        const pid = e.pointerId
         const move = (ev: PointerEvent) => {
+          if (ev.pointerId !== pid) return
           const dy = ev.clientY - startY
           if (Math.abs(dy) > 4) moved.current = true
           sheet.style.maxHeight = `${Math.max(130, Math.min(innerHeight * 0.62, startH - dy))}px`
         }
-        // one cleanup owns the whole gesture — whichever release arrives first
+        // one cleanup owns the whole gesture — whichever release arrives
+        // first removes exactly the listeners this gesture registered
         const done = () => {
           removeEventListener('pointermove', move)
-          removeEventListener('pointerup', done)
+          removeEventListener('pointerup', up)
           removeEventListener('pointercancel', cancel)
         }
-        const up = () => {
+        const up = (ev: PointerEvent) => {
+          if (ev.pointerId !== pid) return
           done()
           try {
-            rail.releasePointerCapture(e.pointerId)
+            rail.releasePointerCapture(pid)
           } catch {
             /* already released */
           }
@@ -106,10 +110,11 @@ function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) 
           // keep moved through it so a drag never toggles, then release
           setTimeout(() => (moved.current = false), 0)
         }
-        const cancel = () => {
+        const cancel = (ev: PointerEvent) => {
+          if (ev.pointerId !== pid) return
           done()
           try {
-            rail.releasePointerCapture(e.pointerId)
+            rail.releasePointerCapture(pid)
           } catch {
             /* already released */
           }
@@ -123,11 +128,14 @@ function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) 
         addEventListener('pointercancel', cancel)
       }}
       onClick={(e) => {
-        // e.detail === 0 → keyboard/assistive activation, always allowed
-        if ((!armed.current && e.detail !== 0) || moved.current) return
+        // e.detail === 0 → keyboard/assistive activation, always allowed;
+        // a drag's trailing click and retargeted station clicks are not
+        const wasArmed = armed.current
+        const wasDrag = moved.current
+        armed.current = false
+        if ((!wasArmed && e.detail !== 0) || wasDrag) return
         setFull(!full)
         onSnap?.(!full)
-        armed.current = false
       }}
     />
   )
@@ -166,12 +174,25 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
       setFull(false)
     }
   }, [hit])
-  if (!hit) return null
+  // dismissal exits toward its entry edge — keep the last hit mounted
+  // briefly so the sheet leaves rather than vanishing
+  const [ghost, setGhost] = useState<typeof hit>(null)
+  useEffect(() => {
+    if (hit) {
+      setGhost(hit)
+      return
+    }
+    const t = setTimeout(() => setGhost(null), 240)
+    return () => clearTimeout(t)
+  }, [hit])
+  const shown = hit ?? ghost
+  if (!shown) return null
+  const cls = `inspector${full ? ' full' : ''}${hit ? '' : ' closing'}`
 
-  if (hit.kind === 'works') {
-    const w = hit.w
+  if (shown.kind === 'works') {
+    const w = shown.w
     return (
-      <aside className={`inspector${full ? ' full' : ''}`} aria-label="closed works detail">
+      <aside className={`${cls} worksheet`} aria-label="closed works detail">
         <Grab full={full} setFull={setFull} onSnap={() => haptic('nudge')} />
         <header>
           <span className="wbox-lg">{w.count > 9 ? '9+' : w.count}</span>
@@ -192,14 +213,14 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
     )
   }
 
-  const { s, line, corridor } = hit
+  const { s, line, corridor } = shown
   const st = s.step
   const forks = branchesAt(corridor, s)
   const merges = mergesAt(corridor, s)
   const svc = line.trunk ? `S${net.corridors.indexOf(corridor) + 1}` : line.service
 
   return (
-    <aside className={`inspector${full ? ' full' : ''}`} aria-label="station detail">
+    <aside className={cls} aria-label="station detail">
       <Grab full={full} setFull={setFull} onSnap={() => haptic('nudge')} />
       <header>
         <span className="stopdot" style={{ borderColor: line.color }} />

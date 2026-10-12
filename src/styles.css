@@ -184,6 +184,14 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   font: 600 11px var(--cond); color: var(--ink);
 }
 .maptools .openbtn span { font: inherit; }
+/* first-run caption — names what "open" opens and that nothing leaves
+   the device; it sits beside the action it explains */
+.maptools .brandcap {
+  font: 500 11px var(--cond); color: var(--mute); user-select: none;
+  margin-left: 2px; white-space: nowrap;
+}
+.stage.night .maptools .brandcap { color: #8898ae; }
+@media (max-width: 760px) { .maptools .brandcap { display: none; } }
 .maptools button:hover { color: var(--navy); border-color: var(--navy); }
 .maptools button:active { transform: translateY(1px); }
 
@@ -289,6 +297,13 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 }
 @keyframes slidein { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .inspector { animation: none; } }
+/* dismissal exits back toward its entry edge rather than vanishing */
+.inspector.closing {
+  transform: translateX(24px); opacity: 0; pointer-events: none;
+  transition: transform 0.22s var(--ease), opacity 0.22s var(--ease) !important;
+}
+/* a works sheet is a note, not a column — size to its content */
+.inspector.worksheet { bottom: auto; max-height: calc(100vh - 32px); }
 
 .inspector header { display: flex; gap: 10px; align-items: flex-start; }
 .inspector h2 { margin: 0; font: 600 15px/1.25 var(--cond); }
@@ -298,6 +313,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   color: var(--mute); font-size: 11px; flex: none;
 }
 .inspector .x:hover { background: #eef1f6; color: var(--ink); }
+.inspector .x:active { background: #e0e7f0; transform: translateY(1px); }
+.stage.night .inspector .x:active { background: #232f40; }
+.followpill:active { transform: translateX(-50%) translateY(1px); background: #0d3c7e; }
 .stopdot {
   flex: none; width: 16px; height: 16px; margin-top: 2px;
   border-radius: 50%; border: 3px solid var(--navy); background: #fff;
@@ -595,7 +613,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   margin-top: 6px;
 }
-.gsign .gsteps span { font: 600 8.5px var(--xcond); letter-spacing: 0.14em; text-transform: uppercase; color: #7d93b5; }
+.gsign .gsteps span { font: 600 11px var(--xcond); letter-spacing: 0.12em; text-transform: uppercase; color: #7d93b5; }
 .gsign .sign::after {
   content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px;
   border: 6px solid transparent; border-top-color: #12233f;
@@ -613,7 +631,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 }
 .sign b { display: block; font: 700 14px var(--xcond); letter-spacing: 0.04em; }
 .sign p { margin: 3px 0 5px; font: 500 12px var(--cond); color: #a9bcd6; }
-.sign button { font: 600 9.5px var(--cond); color: #7f96b8; text-decoration: underline; text-underline-offset: 2px; }
+.sign button { font: 600 11.5px var(--cond); color: #7f96b8; text-decoration: underline; text-underline-offset: 2px; padding: 4px 8px; }
 .sign button:hover { color: #cfe0f5; }
 @keyframes signhang { from { opacity: 0; margin-top: -10px; } to { opacity: 1; margin-top: 0; } }
 .dock .play.nudge { animation: nudge 1.5s var(--ease) infinite; }
@@ -643,21 +661,24 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   .maptools { top: 12px; left: 12px; }
   .maptools button { width: 42px; height: 42px; }
   .maptools .openbtn { width: auto; }
-  .followpill { bottom: calc(var(--dockh, 112px) + 14px); }
+  .followpill { bottom: calc(var(--dockh, 112px) + 24px); }
 
   .key { left: 10px; top: 62px; bottom: auto; width: min(300px, calc(100vw - 20px)); }
   .key.shut { transform: none; }
   .keybody { max-height: 34vh; }
 
   .inspector {
-    top: auto; left: 10px; right: 10px; bottom: calc(var(--dockh, 112px) + 10px); width: auto;
+    /* dock's own 10px bottom offset + a real 10px gap above its top edge */
+    top: auto; left: 10px; right: 10px; bottom: calc(var(--dockh, 112px) + 20px); width: auto;
     max-height: 30vh; border-radius: 14px; padding-top: 5px;
     transition: max-height 0.3s var(--ease);
     animation-name: slideup; /* the sheet arrives from its dock edge, not sideways */
   }
   @keyframes slideup { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
   .inspector.dragging { transition: none; }
-  .inspector.full { max-height: 62vh; }
+  /* even expanded, a strip of map survives above the chrome */
+  .inspector.full { max-height: min(62vh, calc(100dvh - var(--dockh, 112px) - 190px)); }
+  .inspector.closing { transform: translateY(28px); }
 
   .dock {
     left: 10px; right: 10px; bottom: 10px; transform: none;
@@ -667,12 +688,16 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   .dock button { min-height: 34px; min-width: 34px; }
   .dock .play { min-width: 46px; min-height: 46px; }
   .dock .speeds button { min-height: 34px; min-width: 34px; }
-  /* two rows: transport controls up top, the next-stop board the full
-     width beneath — the redundant counter line steps aside */
-  .dock .rideinfo { order: 10; flex-basis: 100%; min-width: 0; max-width: none; }
+  /* two rows only: transport controls up top, then one shared band —
+     the LED board and the scrubber sit side by side */
+  .dock .rideinfo {
+    order: 10; flex-basis: 100%; min-width: 0; max-width: none;
+    display: flex; align-items: center; gap: 10px;
+  }
   .dock .ridesub { display: none; }
-  /* the scrubber's touch region — thin track, generous band */
-  .dock .rideprog { height: 40px; }
+  .dock .rideinfo .led { flex: 1.4; min-width: 0; }
+  /* the scrubber's touch region stays generous while sharing the row */
+  .dock .rideinfo .rideprog { flex: 1; height: 40px; margin: 0; }
   .dock .rideprog::before { top: 50%; margin-top: -2px; }
   .dock .rideprog i { top: 50%; margin-top: -2px; }
   .dock .progthumb { top: 50%; margin-top: -5.5px; }
@@ -700,6 +725,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   /* keep the sheet's detent transition alive through the theme swap */
   transition: background 1.1s var(--ease), color 1.1s var(--ease), border-color 1.1s var(--ease), max-height 0.3s var(--ease);
 }
+/* a live drag outranks the theme — the sheet follows the finger directly */
+.stage.night .inspector.dragging { transition: none; }
 .stage.night .keyhead b, .stage.night .inspector h2, .stage.night .svcname { color: #e8eef7; }
 .stage.night .keyhead span, .stage.night .keyhead i,
 .stage.night .inspector .sub, .stage.night .inspector .note,
@@ -782,7 +809,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   .ptswitch.live { opacity: 0; }
   .train .beam, .train .pool, .train .head,
   .plano .st > *, .rideprog i, .progthumb, .zone, .track { transition: none; }
-  .inspector { transition: none; }
+  /* must outrank the night chrome transition list, whatever the theme */
+  .inspector, .stage.night .inspector { transition: none; }
   .dock .play.nudge { animation: none; box-shadow: 0 0 0 3px rgba(15, 78, 158, 0.4); }
 }
 @media (prefers-reduced-motion: reduce) and (hover: hover) and (pointer: fine) {

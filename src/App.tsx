@@ -109,9 +109,17 @@ export default function App() {
   useEffect(() => {
     if (!guide || !net) { setGpos(null); return }
     if (guide === 3) {
-      const r = document.querySelector('.dock .play')?.getBoundingClientRect()
-      setGpos(r ? { x: r.left + r.width / 2, y: r.top } : null)
-      return
+      // the play button's rect moves when the dock reflows — track it on
+      // animation frames like the map anchors do
+      const track = () => {
+        const r = document.querySelector('.dock .play')?.getBoundingClientRect()
+        if (r) setGpos((prev) => (prev && Math.abs(prev.x - (r.left + r.width / 2)) < 0.5 && Math.abs(prev.y - r.top) < 0.5 ? prev : { x: r.left + r.width / 2, y: r.top }))
+      }
+      let raf = requestAnimationFrame(function loop() {
+        track()
+        raf = requestAnimationFrame(loop)
+      })
+      return () => cancelAnimationFrame(raf)
     }
     const ix =
       guide === 2
@@ -284,7 +292,8 @@ export default function App() {
         })
         map.current?.setTrain(arrived.x, arrived.y, end.angle, true, lineColorOf(net, arrived.lineId))
         if (followRef.current) map.current?.keepInView(arrived.x, arrived.y)
-        haptic('nudge') // station detent — the train settles into the stop
+        // no haptic on ordinary arrivals — at speed that's constant noise;
+        // physical feedback stays for seeks, detents and the switch throw
         if (rp.leg >= ride.legs.length) {
           setPlaying(false)
           map.current?.terminusGlow(ride.corridorIdx)
@@ -315,6 +324,7 @@ export default function App() {
       rideRef.current = { leg: Math.min(k, ride.legs.length - 1), dist: 0, dwell: 0 }
       switchFired.current.clear()
       setFollowOn(true)
+      haptic('nudge') // user-initiated seek
       const stop = ride.stops[k]!
       setSel(stop.id)
       setRideUi({ stop: k + 1, total: ride.stops.length, name: stop.name, next: ride.stops[k + 1]?.name ?? 'terminus' })
@@ -532,6 +542,7 @@ export default function App() {
             </svg>
             <span>open</span>
           </button>
+          <span className="brandcap" aria-hidden>agent-session exports · files stay local</span>
           <button aria-label="find a station ( / )" title="find a station" onClick={() => setFinder(true)}>
             <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
               <circle cx="7" cy="7" r="4.4" fill="none" stroke="currentColor" strokeWidth="1.8" />

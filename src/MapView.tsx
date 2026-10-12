@@ -485,14 +485,18 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }, [net])
 
   // indexes
-  const { stationIndex, worksIndex } = useMemo(() => {
+  const { stationIndex, worksIndex, lineColors } = useMemo(() => {
     const si = new Map<string, Station>()
     const wi = new Map<string, Works>()
+    const lc = new Map<string, string>()
     for (const c of net.corridors) {
-      for (const l of c.lines) for (const s of l.stations) si.set(s.id, s)
+      for (const l of c.lines) {
+        for (const s of l.stations) si.set(s.id, s)
+        lc.set(l.id, l.color)
+      }
       for (const w of c.works) wi.set(w.id, w)
     }
-    return { stationIndex: si, worksIndex: wi }
+    return { stationIndex: si, worksIndex: wi, lineColors: lc }
   }, [net])
 
   const selStation = sel ? stationIndex.get(sel) : undefined
@@ -622,9 +626,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               <circle className="halo-ring" cx={selStation.x} cy={selStation.y} r={13} />
               <circle className="halo-dot" cx={selStation.x} cy={selStation.y} r={13} />
               <g transform={`translate(${selStation.x} ${selStation.y - 13})`}>
+                {/* a station totem — mast + ring roundel in the service's
+                    own color, the wayfinding language of the map itself */}
                 <g className="pin">
-                  <path d="M0 0 C-5 -7 -7 -10 -7 -13 A7 7 0 1 1 7 -13 C7 -10 5 -7 0 0Z" fill="#E2001A" />
-                  <circle cy={-13} r={2.6} fill="#fff" />
+                  <line x1={0} y1={-2} x2={0} y2={-13} stroke="#8b99ad" strokeWidth={1.6} />
+                  <circle cy={-17.5} r={5.2} fill="#fff" stroke={lineColors.get(selStation.lineId) ?? '#8b99ad'} strokeWidth={2.2} />
+                  <line x1={-5.2} y1={-17.5} x2={5.2} y2={-17.5} stroke={lineColors.get(selStation.lineId) ?? '#8b99ad'} strokeWidth={2.2} />
                 </g>
               </g>
             </g>
