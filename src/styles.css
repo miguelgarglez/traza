@@ -642,6 +642,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 @media (max-width: 720px) {
   .maptools { top: 12px; left: 12px; }
   .maptools button { width: 42px; height: 42px; }
+  .maptools .openbtn { width: auto; }
   .followpill { bottom: calc(var(--dockh, 112px) + 14px); }
 
   .key { left: 10px; top: 62px; bottom: auto; width: min(300px, calc(100vw - 20px)); }
