@@ -293,9 +293,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }
 
   // initial fit once the net changes; the plano "lays track" for a moment.
-  // Open on a readable neighborhood of the first service — a screenful of
-  // trunk at k≈1 — not the whole service shrunk thin.
+  // The opening is a two-beat move: frame the whole first service while
+  // the track draws in, then dive to a readable neighborhood — a screenful
+  // of trunk at k≈1, not the whole service shrunk thin. A user gesture at
+  // any point steals the camera and the dive never fires.
   // The whole network is a zoom-out away ('f' / the fit button).
+  const openFly = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     const c0 = net.corridors[0]
     const trunk = c0?.lines.find((l) => l.trunk)
@@ -313,8 +316,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       // desktop keeps the system headboard in the opening frame — the
       // imprint is the product's name on first paint, worth the zoom-out
       const hbLeft = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 262
-      const x0 = mobile ? s0.x - P * 1.2 : Math.min(s0.x - P * 2.2, nbLeft - 16, hbLeft - 24)
-      const x1 = Math.min(corridorBounds[0]!.geo.x1 + 30, s0.x + wSpan)
+      // on a portrait screen a flat run of trunk leaves dead air above and
+      // below — anchor on the first interchange so the opening composes
+      // vertically: trunk, a branch arc and the works all inside the frame
+      const anchor = mobile ? (trunk.stations.find((s) => s.tier === 'interchange') ?? s0) : s0
+      const x0 = mobile ? anchor.x - wSpan / 2 : Math.min(s0.x - P * 2.2, nbLeft - 16, hbLeft - 24)
+      const x1 = mobile ? anchor.x + wSpan / 2 : Math.min(corridorBounds[0]!.geo.x1 + 30, s0.x + wSpan)
       // vertical extent of everything inside that x-window
       let y0 = c0.trunkY - U * 1.5 // the headboard hangs above the trunk
       let y1 = c0.trunkY + U * 0.8
@@ -326,11 +333,27 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             if (p.x >= x0 - U && p.x <= x1 + U) { y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y) }
       }
       for (const w of c0.works) if (w.x >= x0 && w.x <= x1) { y0 = Math.min(y0, w.y); y1 = Math.max(y1, w.y) }
-      fitTo(x0, y0 - U * 0.4, x1, y1 + U * 0.5, false)
+      // on phones, lift the composition — the detail sheet will open into
+      // the space it leaves, and the map never reads as bottom-half filler
+      if (mobile) y0 -= U * 0.5
+      const d0 = { x0, y0: y0 - U * 0.4, x1, y1: y1 + U * 0.5 }
+      if (reduced) {
+        fitTo(d0.x0, d0.y0, d0.x1, d0.y1, false)
+      } else {
+        const g = corridorBounds[0]!.geo
+        fitTo(g.x0 - 60, g.y0 - U * 0.6, g.x1 + 60, g.y1 + U * 0.9, false)
+        openFly.current = setTimeout(() => {
+          openFly.current = null
+          fitTo(d0.x0, d0.y0, d0.x1, d0.y1, true)
+        }, 780)
+      }
     }
     setFresh(!reduced)
     const t = setTimeout(() => setFresh(false), 2600)
-    return () => clearTimeout(t)
+    return () => {
+      clearTimeout(t)
+      if (openFly.current) { clearTimeout(openFly.current); openFly.current = null }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [net])
 
@@ -343,6 +366,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       e.preventDefault()
       // a gesture always wins over a camera flight and suspends ride-follow
       if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
+      if (openFly.current) { clearTimeout(openFly.current); openFly.current = null }
       gestureRef.current?.()
       svg.dataset.pan = '1'
       clearTimeout(panIdle)
@@ -364,6 +388,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   const onPointerDown = (e: React.PointerEvent) => {
     // a gesture always wins over a camera flight — nothing fights the hand
     if (flight.current != null) { cancelAnimationFrame(flight.current); flight.current = null }
+    if (openFly.current) { clearTimeout(openFly.current); openFly.current = null }
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pointers.current.size === 2) {

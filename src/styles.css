@@ -32,7 +32,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 
 /* ============================ the plano ============================ */
 .mapwrap { position: absolute; inset: 0; background: var(--field); transition: background 1.1s var(--ease); overflow: hidden; }
-.stage.night .mapwrap { background: #0b0e13; }
+.stage.night .mapwrap { background: #100d0a; }
 .plano {
   width: 100%; height: 100%; display: block;
   cursor: grab; touch-action: none;
@@ -51,19 +51,19 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .plano.riding .st-l, .plano.riding .wnum { visibility: hidden; }
 
 .zone { fill: #ffffff; opacity: 0.34; transition: fill 1.1s var(--ease), opacity 0.25s; }
-.plano.riding .zone { fill: #1b2635; }
+.plano.riding .zone { fill: #211a10; }
 
 .track { fill: none; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; transition: filter 1.1s var(--ease), stroke-width 0.3s var(--ease); }
 /* rails bulk up as you approach — the diagram reads as infrastructure */
 .plano[data-z='near'] .track { stroke-width: 8.5; }
 .plano[data-z='far'] .track { stroke-width: 5.5; }
 .track.inferred { stroke-dasharray: 0.014 0.009; }
-.plano.riding .track { filter: drop-shadow(0 0 5px rgba(140, 180, 235, 0.45)); }
+.plano.riding .track { filter: drop-shadow(0 0 5px rgba(255, 190, 95, 0.40)); }
 .plano.riding .link, .plano.riding .stub { opacity: 0.35; }
-.plano.riding .lb { fill: #8398b3; transition: fill 1.1s var(--ease); }
-.plano.riding .nb-name { fill: #a8bdd6; }
-.plano.riding .wbox { fill: #16202e; }
-.plano.riding .wnum { fill: #c4d3e6; }
+.plano.riding .lb { fill: #9d8a6d; transition: fill 1.1s var(--ease); }
+.plano.riding .nb-name { fill: #bfa983; }
+.plano.riding .wbox { fill: #1e170e; }
+.plano.riding .wnum { fill: #dbcda9; }
 
 /* track-laying on load: the trunk draws itself, stations pop on top */
 .plano.fresh .track {
@@ -177,7 +177,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   font: 700 15px var(--xcond); letter-spacing: 0.1em; color: var(--ink);
   margin-right: 2px; user-select: none;
 }
-.stage.night .maptools .brand { color: #e8eef7; }
+.stage.night .maptools .brand { color: #efe5cf; }
 .maptools button {
   height: 36px; min-width: 36px; display: grid; place-items: center;
   background: var(--paper); border: 1px solid var(--edge); border-radius: 10px;
@@ -197,7 +197,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   font: 500 11px var(--cond); color: var(--mute); user-select: none;
   margin-left: 2px; white-space: nowrap;
 }
-.stage.night .maptools .brandcap { color: #8898ae; }
+.stage.night .maptools .brandcap { color: #a08d6f; }
 @media (max-width: 760px) { .maptools .brandcap { display: none; } }
 .maptools button:hover { color: var(--navy); border-color: var(--navy); }
 .maptools button:active { transform: translateY(1px); }
@@ -227,10 +227,14 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   padding: 10px 14px; text-align: left;
 }
 .keyhead b { font: 700 13px var(--xcond); letter-spacing: 0.08em; text-transform: uppercase; }
-.keyhead span { flex: 1; font: 500 11.5px var(--cond); color: var(--mute); }
+.keyhead span {
+  flex: 1; min-width: 0; font: 500 11.5px var(--cond); color: var(--mute);
+  /* one baseline, one line — a wrapped meta orphans a word and drops the row */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .keyhead i { font-style: normal; color: var(--faint); font-size: 10px; }
-/* the service currently ridden — keeps the collapsed key legible,
-   and on phones it is the only place the route is still named */
+/* the service currently ridden — keeps the collapsed key legible on
+   desktop; on phones the LED board already names the route */
 .keyhead .svcnow {
   display: flex; align-items: center; gap: 6px; font-style: normal;
   font: 600 10.5px var(--cond); color: var(--ink);
@@ -238,7 +242,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 }
 .keyhead .svcnow > u { text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .keyhead .svcnow .svcchip { height: 18px; min-width: 24px; padding: 0 4px; line-height: 18px; font-size: 9.5px; border-radius: 4px; flex-shrink: 0; }
-.stage.night .keyhead .svcnow { color: #e8eef7; }
+.stage.night .keyhead .svcnow { color: #efe5cf; }
+@media (max-width: 720px) { .keyhead .svcnow { display: none; } }
 .keybody { border-top: 1px solid var(--edge); max-height: 42vh; overflow-y: auto; }
 
 .svc {
@@ -291,7 +296,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   background: #fff2d8; color: #8a6a12; border: 1px solid #eeda9f;
 }
 .keyfoot .haptoggle.on { border-color: var(--navy); background: #eef3fb; }
-.stage.night .keyfoot .haptoggle.on { border-color: #5f7394; background: #232f40; }
+.stage.night .keyfoot .haptoggle.on { border-color: #8d7a5a; background: #33291c; }
 .keyfoot button + .demopill { margin-left: auto; }
 .keyfoot .ghostbtn { margin-left: auto; }
 
@@ -325,7 +330,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 }
 .inspector .x:hover { background: #eef1f6; color: var(--ink); }
 .inspector .x:active { background: #e0e7f0; transform: translateY(1px); }
-.stage.night .inspector .x:active { background: #232f40; }
+.stage.night .inspector .x:active { background: #33291c; }
 .followpill:active { transform: translateX(-50%) translateY(1px); background: #0d3c7e; }
 .stopdot {
   flex: none; width: 16px; height: 16px; margin-top: 2px;
@@ -401,10 +406,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 }
 .inspector footer button:hover:not(:disabled) { border-color: var(--navy); }
 .inspector footer button:active:not(:disabled) { transform: translateY(1px); background: #eef2f8; }
-.stage.night .inspector footer button:active:not(:disabled) { background: #232f40; }
+.stage.night .inspector footer button:active:not(:disabled) { background: #33291c; }
 .sign button:active { color: #fff; }
 .inspector .grab:active::after { background: var(--navy); }
-.stage.night .inspector .grab:active::after { background: #7d93b5; }
+.stage.night .inspector .grab:active::after { background: #a9967c; }
 .inspector footer button:disabled { opacity: 0.4; cursor: default; }
 
 .note { font: 400 12.5px/1.55 'Fira Sans'; color: var(--mute); }
@@ -635,12 +640,18 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 .sign {
   position: relative; pointer-events: auto;
   background: #12233f; color: #eef3fa; border-radius: 9px;
+  border-left: 5px solid #f6b100;
   padding: 11px 16px 9px; text-align: center;
   box-shadow: 0 8px 22px rgba(8, 16, 28, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.09);
 }
+/* a hanging wayfinding blade: the rail bar spans wider than the sign,
+   two drop wires connect it — transit furniture, not a floating plaque */
 .sign::before {
-  content: ''; position: absolute; top: -14px; left: 14%; right: 14%; height: 14px;
-  border-left: 2px solid #3a4d68; border-right: 2px solid #3a4d68;
+  content: ''; position: absolute; top: -17px; left: -9%; right: -9%; height: 17px;
+  background:
+    linear-gradient(#2c3e56, #2c3e56) 0 0 / 100% 3px no-repeat,
+    linear-gradient(#3a4d68, #3a4d68) 16% 3px / 2px 14px no-repeat,
+    linear-gradient(#3a4d68, #3a4d68) 84% 3px / 2px 14px no-repeat;
 }
 .sign b { display: block; font: 700 14px var(--xcond); letter-spacing: 0.04em; }
 .sign p { margin: 3px 0 5px; font: 500 12px var(--cond); color: #a9bcd6; }
@@ -665,8 +676,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
     content: ''; position: absolute; left: 50%; top: 7px; margin-left: -18px;
     width: 36px; height: 5px; border-radius: 3px; background: #c3ccda;
   }
-  .stage.night .inspector .grab { background: #131a25; }
-  .stage.night .inspector .grab::after { background: #3a4a61; }
+  .stage.night .inspector .grab { background: #1d1712; }
+  .stage.night .inspector .grab::after { background: #584729; }
 }
 
 /* ============================ mobile ============================ */
@@ -689,6 +700,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
   }
   @keyframes slideup { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
   .inspector.dragging { transition: none; }
+  /* dragged under the kill line — the sheet thins out before it's thrown */
+  .inspector.doomed { opacity: 0.55; }
+  .inspector.doomed .grab::after { width: 52px; background: #9aa7ba; }
   /* even expanded, a strip of map survives above the chrome */
   .inspector.full { max-height: min(62vh, calc(100dvh - var(--dockh, 112px) - 190px)); }
   .inspector.closing { transform: translateY(28px); }
@@ -725,7 +739,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
     font: 700 10px var(--cond); color: var(--ink);
     border: 1px solid var(--edge); border-radius: 8px;
   }
-  .stage.night .dock .speedcycle { color: #cdd9e8; border-color: #34415a; }
+  .stage.night .dock .speedcycle { color: #ddd1b8; border-color: #4e3f2a; }
   .keyfoot button { min-height: 36px; }
   .finder li { min-height: 44px; }
   @keyframes rise { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -733,83 +747,83 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--navy);
 
 /* ============ night service extends to the chrome ============ */
 .stage.night .key, .stage.night .inspector, .stage.night .finder {
-  background: #131a25; border-color: #273242; color: #cdd9e8;
+  background: #1d1712; border-color: #3b2f20; color: #ddd1b8;
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
   /* keep the sheet's detent transition alive through the theme swap */
   transition: background 1.1s var(--ease), color 1.1s var(--ease), border-color 1.1s var(--ease), max-height 0.3s var(--ease);
 }
 /* a live drag outranks the theme — the sheet follows the finger directly */
 .stage.night .inspector.dragging { transition: none; }
-.stage.night .keyhead b, .stage.night .inspector h2, .stage.night .svcname { color: #e8eef7; }
+.stage.night .keyhead b, .stage.night .inspector h2, .stage.night .svcname { color: #efe5cf; }
 .stage.night .keyhead span, .stage.night .keyhead i,
 .stage.night .inspector .sub, .stage.night .inspector .note,
-.stage.night .inspector .body p, .stage.night .think p { color: #8898ae; }
+.stage.night .inspector .body p, .stage.night .think p { color: #a08d6f; }
 .stage.night .keybody, .stage.night .xfer, .stage.night .call,
-.stage.night .inspector footer, .stage.night .key .srcs { border-color: #273242; }
-.stage.night .chip { background: #1e2937; color: #8fa2b9; }
+.stage.night .inspector footer, .stage.night .key .srcs { border-color: #3b2f20; }
+.stage.night .chip { background: #2b2218; color: #b5a284; }
 .stage.night .chip.a-agent { background: #12325c; color: #7db4f0; }
 .stage.night .chip.a-tool { background: #33290f; color: #d9b45f; }
-.stage.night .xferrow:hover { background: #1a2331; }
-.stage.night .xferrow + .xferrow, .stage.night .callbody, .stage.night .callbody pre.res { border-color: #273242; }
-.stage.night .callhead code, .stage.night .callbody pre { color: #b9c8da; }
-.stage.night .wbox-lg { background: #0e141d; border-color: #4a5a72; color: #cdd9e8; }
-.stage.night .wsteps li { color: #a7b6c9; }
-.stage.night .inspector .x:hover { background: #1e2937; color: #e8eef7; }
-.stage.night .inspector footer { background: #131a25; }
-.stage.night .inspector footer button { background: #1a2331; border-color: #34415476; color: #9db0c6; }
-.stage.night .inspector footer button:hover:not(:disabled) { background: #1e2937; }
+.stage.night .xferrow:hover { background: #261e15; }
+.stage.night .xferrow + .xferrow, .stage.night .callbody, .stage.night .callbody pre.res { border-color: #3b2f20; }
+.stage.night .callhead code, .stage.night .callbody pre { color: #c9bc9e; }
+.stage.night .wbox-lg { background: #140f08; border-color: #6d5836; color: #ddd1b8; }
+.stage.night .wsteps li { color: #baa98a; }
+.stage.night .inspector .x:hover { background: #2b2218; color: #efe5cf; }
+.stage.night .inspector footer { background: #1d1712; }
+.stage.night .inspector footer button { background: #261e15; border-color: #4e3f2a76; color: #b3a081; }
+.stage.night .inspector footer button:hover:not(:disabled) { background: #2b2218; }
 .stage.night .redflag { background: #40262b; color: #ff9aa2; }
-.stage.night .mono { color: #9fb3cc; }
-.stage.night .key .srcs button { border-color: #344154; color: #9db0c6; }
-.stage.night .key .srcs button:hover { background: #1e2937; }
+.stage.night .mono { color: #b3a488; }
+.stage.night .key .srcs button { border-color: #4e3f2a; color: #b3a081; }
+.stage.night .key .srcs button:hover { background: #2b2218; }
 .stage.night .dock {
-  background: #131a25; border-color: #273242;
+  background: #1d1712; border-color: #3b2f20;
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
   transition: background 1.1s var(--ease), border-color 1.1s var(--ease);
 }
-.stage.night .dock button { color: #cdd9e8; }
+.stage.night .dock button { color: #ddd1b8; }
 @media (hover: hover) and (pointer: fine) {
-  .stage.night .dock button:hover:not(:disabled):not(.play) { background: #1e2937; }
+  .stage.night .dock button:hover:not(:disabled):not(.play) { background: #2b2218; }
   /* the play button keeps its own lit palette — never hover-paint it dark */
   .stage.night .dock .play:hover:not(:disabled) { background: #ffe39a; box-shadow: 0 0 22px rgba(255, 217, 122, 0.5); }
-  .stage.night .dock .play.on:hover:not(:disabled) { background: #f2f6fb; }
+  .stage.night .dock .play.on:hover:not(:disabled) { background: #f5eedd; }
 }
-.stage.night .dock .play { background: #ffd97a; color: #131a25; box-shadow: 0 0 18px rgba(255, 217, 122, 0.35); }
-.stage.night .dock .play.on { background: #e8eef7; }
-.stage.night .dock .ridesub { color: #8898ae; }
-.stage.night .dock .fare { border-color: #273242; }
-.stage.night .dock .fare b { color: #e8eef7; }
-.stage.night .dock .fare span { color: #5f7394; }
-.stage.night .dock .rideprog::before { background: #232f40; }
+.stage.night .dock .play { background: #ffd97a; color: #1d1712; box-shadow: 0 0 18px rgba(255, 217, 122, 0.35); }
+.stage.night .dock .play.on { background: #efe5cf; }
+.stage.night .dock .ridesub { color: #a08d6f; }
+.stage.night .dock .fare { border-color: #3b2f20; }
+.stage.night .dock .fare b { color: #efe5cf; }
+.stage.night .dock .fare span { color: #8d7a5a; }
+.stage.night .dock .rideprog::before { background: #33291c; }
 .stage.night .dock .rideprog i { background: #ffd97a; }
 .stage.night .dock .progthumb { border-color: #ffd97a; }
-.stage.night .dock .speeds button.on { background: #e8eef7; color: #131a25; }
-.stage.night .maptools button { background: #131a25; border-color: #273242; color: #8898ae; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5); }
-.stage.night .maptools button:hover { color: #ffd97a; border-color: #3a4a61; }
-.stage.night .keyfoot button { background: #1a2331; border-color: #34415a; color: #cdd9e8; }
-.stage.night .keyfoot button:hover { border-color: #5f7394; }
+.stage.night .dock .speeds button.on { background: #efe5cf; color: #1d1712; }
+.stage.night .maptools button { background: #1d1712; border-color: #3b2f20; color: #a08d6f; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5); }
+.stage.night .maptools button:hover { color: #ffd97a; border-color: #584729; }
+.stage.night .keyfoot button { background: #261e15; border-color: #4e3f2a; color: #ddd1b8; }
+.stage.night .keyfoot button:hover { border-color: #8d7a5a; }
 .stage.night .demopill { background: #33290f; color: #d9b45f; border-color: #4a3d16; }
 .stage.night .svc:hover, .stage.night .svc:active,
 .stage.night .keyhead:active, .stage.night .keyrow:active,
-.stage.night .xferrow:active, .stage.night .callhead:active { background: #1a2331; }
-.stage.night .svc { border-bottom-color: #1e2937; }
-.stage.night .keyrow, .stage.night .keyfoot { border-top-color: #273242; }
-.stage.night .keyrow b, .stage.night .keyrow span, .stage.night .keyrow i { color: #8898ae; }
-.stage.night .srclist code { color: #b9c8da; }
-.stage.night .srclist span { color: #5f7394; }
-.stage.night .finderwrap { background: rgba(10, 14, 20, 0.55); }
-.stage.night .findhead { border-bottom-color: #273242; }
+.stage.night .xferrow:active, .stage.night .callhead:active { background: #261e15; }
+.stage.night .svc { border-bottom-color: #2b2218; }
+.stage.night .keyrow, .stage.night .keyfoot { border-top-color: #3b2f20; }
+.stage.night .keyrow b, .stage.night .keyrow span, .stage.night .keyrow i { color: #a08d6f; }
+.stage.night .srclist code { color: #c9bc9e; }
+.stage.night .srclist span { color: #8d7a5a; }
+.stage.night .finderwrap { background: rgba(14, 10, 5, 0.55); }
+.stage.night .findhead { border-bottom-color: #3b2f20; }
 .stage.night .findhead > span { color: #ffd97a; }
-.stage.night .findhead input { color: #e8eef7; }
-.stage.night .findhead kbd { border-color: #34415a; color: #8898ae; }
-.stage.night .finder li.hit, .stage.night .finder li:active { background: #1e2937; }
-.stage.night .finder li b { color: #e8eef7; }
-.stage.night .finder li span { color: #8898ae; }
-.stage.night .tip { background: #131a25; border-color: #273242; }
-.stage.night .tip b { color: #e8eef7; }
-.stage.night .tip span { color: #8898ae; }
-.stage.night .followpill { background: rgba(19, 26, 37, 0.95); }
-.stage.night .followpill:active { background: #232f40; }
+.stage.night .findhead input { color: #efe5cf; }
+.stage.night .findhead kbd { border-color: #4e3f2a; color: #a08d6f; }
+.stage.night .finder li.hit, .stage.night .finder li:active { background: #2b2218; }
+.stage.night .finder li b { color: #efe5cf; }
+.stage.night .finder li span { color: #a08d6f; }
+.stage.night .tip { background: #1d1712; border-color: #3b2f20; }
+.stage.night .tip b { color: #efe5cf; }
+.stage.night .tip span { color: #a08d6f; }
+.stage.night .followpill { background: rgba(24, 19, 13, 0.95); }
+.stage.night .followpill:active { background: #33291c; }
 
 /* one reduced-motion policy, applied to every effect */
 @media (prefers-reduced-motion: reduce) {

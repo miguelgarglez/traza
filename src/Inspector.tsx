@@ -55,8 +55,8 @@ function CallRow({ c }: { c: NonNullable<Step['calls']>[number] }) {
   )
 }
 
-/** mobile sheet rail — drag it up to expand, down to tuck, tap to toggle */
-function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) => void; onSnap?: (f: boolean) => void }) {
+/** mobile sheet rail — drag it up to expand, down to tuck or throw away, tap to toggle */
+function Grab({ full, setFull, onSnap, onDismiss }: { full: boolean; setFull: (f: boolean) => void; onSnap?: (f: boolean) => void; onDismiss?: () => void }) {
   const moved = useRef(false)
   // a station tap can retarget its click to the freshly-mounted rail when
   // the sheet opens under the finger — only a press that began on the
@@ -76,11 +76,19 @@ function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) 
         rail.setPointerCapture(e.pointerId)
         sheet.classList.add('dragging') // the sheet follows the finger — no transition
         const pid = e.pointerId
+        // a short trail of the gesture, for release velocity — a fast
+        // downward fling throws the sheet away instead of tucking it
+        const trail: { t: number; y: number }[] = [{ t: e.timeStamp, y: e.clientY }]
         const move = (ev: PointerEvent) => {
           if (ev.pointerId !== pid) return
           const dy = ev.clientY - startY
           if (Math.abs(dy) > 4) moved.current = true
-          sheet.style.maxHeight = `${Math.max(130, Math.min(innerHeight * 0.62, startH - dy))}px`
+          trail.push({ t: ev.timeStamp, y: ev.clientY })
+          if (trail.length > 6) trail.shift()
+          const h = Math.max(80, Math.min(innerHeight * 0.62, startH - dy))
+          sheet.style.maxHeight = `${h}px`
+          // below the compact detent the sheet telegraphs its throw-away
+          sheet.classList.toggle('doomed', h < 118)
         }
         // one cleanup owns the whole gesture — whichever release arrives
         // first removes exactly the listeners this gesture registered
@@ -101,10 +109,19 @@ function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) 
           const released = sheet.getBoundingClientRect().height
           sheet.style.maxHeight = ''
           sheet.classList.remove('dragging')
+          sheet.classList.remove('doomed')
           if (moved.current) {
-            const next = released > innerHeight * 0.42
-            setFull(next)
-            if (next !== full) onSnap?.(next)
+            const a = trail[0]!
+            const b = trail[trail.length - 1]!
+            const vy = b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0
+            if (vy > 0.55 || released <= 118) {
+              // flung down or held under the kill line — the sheet goes away
+              onDismiss?.()
+            } else {
+              const next = released > innerHeight * 0.42
+              setFull(next)
+              if (next !== full) onSnap?.(next)
+            }
           }
           // the gesture's click dispatches synchronously after pointerup —
           // keep moved/armed through it so a drag never toggles, then
@@ -124,6 +141,7 @@ function Grab({ full, setFull, onSnap }: { full: boolean; setFull: (f: boolean) 
           }
           sheet.style.maxHeight = ''
           sheet.classList.remove('dragging')
+          sheet.classList.remove('doomed')
           armed.current = false
           setTimeout(() => (moved.current = false), 0)
         }
@@ -197,7 +215,7 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
     const w = shown.w
     return (
       <aside className={`${cls} worksheet`} aria-label="closed works detail">
-        <Grab full={full} setFull={setFull} onSnap={() => haptic('nudge')} />
+        <Grab full={full} setFull={setFull} onSnap={() => haptic('nudge')} onDismiss={() => { haptic('nudge'); onClose() }} />
         <header>
           <span className="wbox-lg">{w.count > 9 ? '9+' : w.count}</span>
           <div>
@@ -225,7 +243,7 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
 
   return (
     <aside className={cls} aria-label="station detail">
-      <Grab full={full} setFull={setFull} onSnap={() => haptic('nudge')} />
+      <Grab full={full} setFull={setFull} onSnap={() => haptic('nudge')} onDismiss={() => { haptic('nudge'); onClose() }} />
       <header>
         <span className="stopdot" style={{ borderColor: line.color }} />
         <div>
