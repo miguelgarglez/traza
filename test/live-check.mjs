@@ -105,9 +105,11 @@ for (const [name, engine] of [['firefox', firefox], ['webkit', webkit]]) {
     await p.goto(url, { waitUntil: 'networkidle' })
     await p.waitForSelector('.dock .play', { timeout: 10000 })
     await p.click('.dock .play')
-    await p.waitForTimeout(2500)
     const riding = await p.$eval('svg.plano', (e) => e.classList.contains('riding'))
-    const trainVisible = await p.$eval('.train', (e) => e.style.display !== 'none')
+    const trainVisible = await p
+      .waitForFunction(() => document.querySelector('.shuttle')?.style.display !== 'none', { timeout: 8000 })
+      .then(() => true)
+      .catch(() => false)
     await p.screenshot({ path: join(out, `verify-${name}.png`) })
     await p.click('.dock .play')
     await b.close()

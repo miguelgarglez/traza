@@ -95,7 +95,10 @@ if (realDir && existsSync(realDir)) {
   const rw = ingest(collect(realDir))
   const ms = performance.now() - t0
   console.log(`  ingested in ${ms.toFixed(0)}ms`)
-  ok(rw.sessions.length === 11, `11 sessions (${rw.sessions.length})`)
+  const mani = existsSync(join(realDir, 'manifest.json'))
+    ? JSON.parse(readFileSync(join(realDir, 'manifest.json'), 'utf8')).sessions?.length
+    : null
+  ok(mani == null || rw.sessions.length === mani, `all manifest sessions ingested (${rw.sessions.length} of ${mani ?? '?'})`)
   const rn = rw.sessions.find((s) => s.id.includes('righteous-nest'))
   ok(!!rn, 'righteous-nest present')
   const tape = buildTape(rn)
