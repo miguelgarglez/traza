@@ -33,7 +33,10 @@ const node = (chain, parent, role, content, extra = {}, tsOff = 0) => {
   nodes.push(n)
   return nid++
 }
-const call = (name, args, i = 0) => ({ id: `toolu_${Math.random().toString(36).slice(2, 12)}${i}`, name, arguments: args, index: i, kind: 'function' })
+// deterministic ids — engine.mjs regenerates fixtures every run, so random
+// ids would dirty the tree each time
+let callSeq = 0
+const call = (name, args, i = 0) => ({ id: `toolu_${(callSeq++).toString(36).padStart(10, '0')}${i}`, name, arguments: args, index: i, kind: 'function' })
 
 // turn 1 context roots
 node('branch@0', null, 'system', '<system_info>workspace: ~/work/fern — a tiny CLI that prints fern fronds as ASCII.</system_info>', {}, 0)
