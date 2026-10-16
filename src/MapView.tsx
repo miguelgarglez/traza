@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { Label, Network, Station, Works } from './lib/metro.ts'
+import type { Tether } from './lib/links.ts'
 import { P, U } from './lib/metro.ts'
 
 export interface MapHandle {
@@ -29,6 +30,10 @@ interface Props {
   riding: boolean
   /** solo a corridor index; null = everything lit */
   solo: number | null
+  /** cross-session tethers — dashed threads between fabrics */
+  tethers?: Tether[]
+  /** station ids dimmed out by the active filter set */
+  fout?: Set<string>
   /** fired once per gesture when the user drags the plano (first-run guide) */
   onUserPan?: () => void
   /** fired on every manual gesture (drag, wheel, pinch) — suspends ride follow */
@@ -42,26 +47,64 @@ const K_MAX = 8
 
 const d = (pts: { x: number; y: number }[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(' ')
 
+// a strand is a thread, not a rail — smooth the polyline through midpoints
+// so forks and rejoins flow like weft instead of snapping at 45°
+const smooth = (pts: { x: number; y: number }[]) => {
+  if (pts.length < 3) return d(pts)
+  let out = `M${pts[0]!.x} ${pts[0]!.y}`
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i]!
+    const n = pts[i + 1]!
+    const mx = (p.x + n.x) / 2
+    const my = (p.y + n.y) / 2
+    out += ` Q${p.x} ${p.y} ${mx} ${my}`
+  }
+  const last = pts[pts.length - 1]!
+  out += ` L${last.x} ${last.y}`
+  return out
+}
+
+const PAPER = '#2c2316'
+const RING = '#0f0b07'
+
 function stationGlyph(s: Station, color: string, sel: boolean) {
   if (s.tier === 'terminus')
+    // a tied end — the strand's knot where the cloth starts or finishes
     return (
       <g key={s.id}>
-        <circle cx={s.x} cy={s.y} r={6} fill="#fff" stroke={color} strokeWidth={3.6} />
-        {sel && <circle cx={s.x} cy={s.y} r={3} fill={color} />}
+        <circle cx={s.x} cy={s.y} r={6.2} fill={PAPER} stroke={color} strokeWidth={2.6} />
+        <circle cx={s.x} cy={s.y} r={2.4} fill={color} />
+        {sel && <circle cx={s.x} cy={s.y} r={9.4} fill="none" stroke="#d8a851" strokeWidth={1.2} />}
       </g>
     )
   if (s.tier === 'interchange')
+    // a twist knot — two strands visibly cross and wrap here
     return (
       <g key={s.id}>
-        <circle cx={s.x} cy={s.y} r={7} fill="#fff" stroke="#1C2733" strokeWidth={2.4} />
-        <circle cx={s.x} cy={s.y} r={2.8} fill={color} />
+        <circle cx={s.x} cy={s.y} r={6.8} fill={PAPER} stroke={RING} strokeWidth={2.2} />
+        <circle cx={s.x} cy={s.y} r={2.9} fill={color} />
+        <path
+          className="twistmark"
+          d={`M${s.x - 6.8} ${s.y + 3.4} Q${s.x} ${s.y - 4.5} ${s.x + 6.8} ${s.y + 3.4}`}
+          fill="none"
+          stroke={color}
+          strokeWidth={1.6}
+          strokeLinecap="round"
+        />
       </g>
     )
-  if (s.tier === 'major') return <circle key={s.id} cx={s.x} cy={s.y} r={4.4} fill="#fff" stroke={color} strokeWidth={2.6} />
-  return <circle key={s.id} cx={s.x} cy={s.y} r={2.3} fill={color} />
+  if (s.tier === 'major')
+    // a bead on the thread — user words and failed calls earn presence
+    return (
+      <g key={s.id}>
+        <circle cx={s.x} cy={s.y} r={4.6} fill={PAPER} stroke={color} strokeWidth={2.2} />
+        <circle cx={s.x} cy={s.y} r={1.8} fill={color} />
+      </g>
+    )
+  return <circle key={s.id} cx={s.x} cy={s.y} r={2.5} fill={color} />
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, onUserPan, onUserGesture, onArrive }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, tethers, fout, onUserPan, onUserGesture, onArrive }, ref) {
   const svgRef = useRef<SVGSVGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
   const trainRef = useRef<SVGGElement>(null)
@@ -619,24 +662,23 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               <g key={l.id} data-ci={ci} style={{ ...fade, opacity: dim(ci) }}>
                 {l.segs.map((sg, j) =>
                   sg.kind === 'track' ? (
-                    /* at reading zoom the line becomes real trackwork —
-                       an ink casing under the color band and a pale
-                       ballast slit down the middle cut it into two
-                       rails (casing + bed hidden until 'near') */
+                    /* the strand — a dark under-shadow lifts the colored
+                       thread off the cloth, and at reading zoom a pale
+                       twist runs inside it like wrapped fibers */
                     <g key={j}>
-                      {!sg.inferred && <path className="trkcasing" d={d(sg.pts)} />}
+                      {!sg.inferred && <path className="tshadow" d={smooth(sg.pts)} />}
                       <path
                         className={sg.inferred ? 'track inferred' : 'track'}
                         style={{ ['--d' as string]: `${ci * 160 + li * 90}ms` }}
                         pathLength={1}
-                        d={d(sg.pts)}
+                        d={smooth(sg.pts)}
                         stroke={l.color}
                       />
-                      {!sg.inferred && <path className="trkbed" d={d(sg.pts)} />}
+                      {!sg.inferred && <path className="twist" d={smooth(sg.pts)} />}
                     </g>
                   ) : sg.kind === 'link' ? (
                     <g key={j}>
-                      <path className="link" d={d(sg.pts)} stroke={l.color} />
+                      <path className="link" d={smooth(sg.pts)} stroke={l.color} />
                       {sg.far && (
                         <text className="ftag" x={sg.pts.at(-1)!.x + 8} y={sg.pts.at(-1)!.y + 3} fill={l.color}>
                           ↩ {serviceName(net, l.mergeStation?.lineId)}
@@ -648,18 +690,38 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               </g>
             )),
           )}
-          {/* works spurs */}
+          {/* tethers — dashed threads tying a spawned session's weave to
+              the knot that launched it */}
+          {(tethers ?? []).map((t) => {
+            const a = stationIndex.get(t.fromStationId)
+            const b = stationIndex.get(t.toStationId)
+            if (!a || !b) return null
+            const dy = (b.y - a.y) / 2
+            const path = `M${a.x} ${a.y} C${a.x} ${a.y + dy},${b.x} ${b.y - dy},${b.x} ${b.y}`
+            return (
+              <g key={t.id} className="tetherg">
+                <path className="tether" d={path} />
+                <circle className="tether-dot" cx={a.x} cy={a.y} r={2.4} />
+                <circle className="tether-dot" cx={b.x} cy={b.y} r={2.4} />
+                <text className="tether-lb" x={a.x + 10} y={a.y + dy * 0.55}>
+                  {t.label}
+                </text>
+              </g>
+            )
+          })}
+          {/* frayed ends — collapsed side-work trails off the strand */}
           {net.corridors.map((c, ci) =>
             c.works.map((w) => {
               const a = stationIndex.get(w.at.stationId)
               if (!a) return null
+              const dir = a.x > w.x ? 1 : -1
+              const bx = w.x + dir * 8
+              const fc = lineColors.get(w.at.stationId) ?? '#8b99ad'
               return (
                 <g key={w.id} className={sel === w.id ? 'works sel' : 'works'} data-ci={ci} style={{ ...fade, opacity: dim(ci) }}>
-                  <path
-                    className="stub"
-                    d={`M${a.x} ${a.y} L${w.x + (a.x > w.x ? 8 : -8)} ${w.y}`}
-                    data-wid={w.id}
-                  />
+                  <path className="fray" d={`M${a.x} ${a.y} Q${(a.x + bx) / 2} ${w.y} ${bx} ${w.y - 4}`} stroke={fc} data-wid={w.id} />
+                  <path className="fray" d={`M${a.x} ${a.y} Q${(a.x + bx) / 2} ${w.y} ${bx + dir * 3} ${w.y}`} stroke={fc} data-wid={w.id} />
+                  <path className="fray" d={`M${a.x} ${a.y} Q${(a.x + bx) / 2} ${w.y} ${bx} ${w.y + 4}`} stroke={fc} data-wid={w.id} />
                   <rect
                     x={w.x - 9}
                     y={w.y - 9}
@@ -669,19 +731,19 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
                     className="wbox"
                     data-wid={w.id}
                   />
-                  <text x={w.x} y={w.y + 3.6} className="wnum" data-wid={w.id}>
+                  <text x={w.x} y={w.y + 3.6} className="wtag" data-wid={w.id}>
                     {w.count > 9 ? '9+' : w.count}
                   </text>
                 </g>
               )
             }),
           )}
-          {/* stations */}
+          {/* knots */}
           {net.corridors.map((c, ci) =>
             c.lines.map((l, li) => (
               <g key={`st-${l.id}`} data-ci={ci} style={{ ...fade, opacity: dim(ci), ['--d' as string]: `${ci * 160 + li * 90 + 500}ms` }}>
                 {l.stations.map((s) => (
-                  <g key={s.id} className={`st st-${s.tier[0]}`} data-sid={s.id}>
+                  <g key={s.id} className={`st st-${s.tier[0]}${fout?.has(s.id) ? ' fout' : ''}`} data-sid={s.id}>
                     {stationGlyph(s, l.color, sel === s.id)}
                     {/* fat invisible hit target — radius scales with --k so it
                         stays ~12px on screen when the plano is zoomed out */}
@@ -691,54 +753,55 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               </g>
             )),
           )}
-          {/* selection halo + you-are-here pin */}
+          {/* selection — a tied marker hanging off the knot */}
           {selStation && (
             <g className="halo">
               <circle className="halo-ring" cx={selStation.x} cy={selStation.y} r={13} />
               <circle className="halo-dot" cx={selStation.x} cy={selStation.y} r={13} />
               <g transform={`translate(${selStation.x} ${selStation.y - 13})`}>
-                {/* a station totem — mast + ring roundel in the service's
-                    own color, the wayfinding language of the map itself */}
                 <g className="pin">
-                  <line x1={0} y1={-2} x2={0} y2={-13} stroke="#8b99ad" strokeWidth={1.6} />
-                  <circle cy={-17.5} r={5.2} fill="#fff" stroke={lineColors.get(selStation.id) ?? '#8b99ad'} strokeWidth={2.2} />
-                  <line x1={-5.2} y1={-17.5} x2={5.2} y2={-17.5} stroke={lineColors.get(selStation.id) ?? '#8b99ad'} strokeWidth={2.2} />
+                  <line x1={0} y1={-2} x2={0} y2={-12} stroke="#d8a851" strokeWidth={1.4} />
+                  <path
+                    d="M-4.6 -22 a4.6 4.6 0 1 1 9.2 0 c0 3.6 -4.6 7.4 -4.6 7.4 s-4.6 -3.8 -4.6 -7.4"
+                    fill={lineColors.get(selStation.id) ?? '#d8a851'}
+                    stroke="#17120d"
+                    strokeWidth={1}
+                  />
+                  <circle cy={-22} r={1.7} fill="#17120d" />
                 </g>
               </g>
             </g>
           )}
-          {/* points-throw flash at junctions the train crosses */}
+          {/* twist flash at junctions the shuttle crosses */}
           <g ref={switchRef} className="ptswitch">
             <path className="swtri" d="M0 -5 L9 0 L0 5 Z" />
           </g>
-          {/* the ride token — a little metro car riding the track */}
-          <g ref={trainRef} className="train" style={{ display: 'none' }}>
-            <path className="beam" d="M14 -4 L64 -16 L64 16 L14 4 Z" />
-            <circle className="pool" cx={34} cy={0} r={13} />
-            <rect className="car" x={-15} y={-7} width={30} height={14} rx={7} />
-            <rect className="win" x={-8} y={-3.4} width={7} height={6.8} rx={2} />
-            <rect className="win" x={1} y={-3.4} width={7} height={6.8} rx={2} />
-            <circle className="head" cx={15} cy={0} r={2.6} />
+          {/* the replay token — a loom shuttle carrying the weft */}
+          <g ref={trainRef} className="shuttle" style={{ display: 'none' }}>
+            <path className="strail" d="M-26 0 L-10 0" stroke="#d8a851" strokeWidth={2.4} strokeLinecap="round" opacity={0.5} />
+            <path className="strail" d="M-40 0 L-30 0" stroke="#d8a851" strokeWidth={1.6} strokeLinecap="round" opacity={0.25} />
+            <ellipse className="sglow" cx={0} cy={0} rx={20} ry={10} fill="rgba(216,168,81,0.28)" />
+            <path className="sbody" d="M-14 0 Q-7 -6.4 0 -6.4 Q7 -6.4 14 0 Q7 6.4 0 6.4 Q-7 6.4 -14 0 Z" />
+            <circle className="stip" cx={8} cy={0} r={1.8} />
+            <circle cx={-3} cy={0} r={1.4} fill="#6b5326" opacity={0.7} />
           </g>
-          {/* ghost service — drifts the trunk when nobody is looking */}
-          <g ref={ghostRef} className="train ghost" style={{ display: 'none' }}>
-            <rect className="car" x={-15} y={-7} width={30} height={14} rx={7} />
-            <rect className="win" x={-8} y={-3.4} width={7} height={6.8} rx={2} />
-            <rect className="win" x={1} y={-3.4} width={7} height={6.8} rx={2} />
+          {/* ghost shuttle — drifts the weft when nobody is looking */}
+          <g ref={ghostRef} className="shuttle ghost" style={{ display: 'none' }}>
+            <path className="sbody" d="M-14 0 Q-7 -6.4 0 -6.4 Q7 -6.4 14 0 Q7 6.4 0 6.4 Q-7 6.4 -14 0 Z" />
           </g>
-          {/* labels — at reading zoom a station earns a second line:
-              title above, the step's actor and number below (or above,
-              on whichever side the label hangs off the track) */}
+          {/* labels — at reading zoom a knot earns a second line:
+              the step title above, its actor and wall-clock below (or
+              above, on whichever side the label hangs off the thread) */}
           {net.corridors.map((c, ci) =>
             c.labels.map((lb: Label, i) => {
               const st = stationIndex.get(lb.stationId)
-              const sub = st ? `${st.step.actor} · stop ${st.ord + 1}` : null
+              const sub = st ? `${st.step.actor} · ${clockOf(st.step.ts)}` : null
               return (
                 <text
                   key={`l${i}`}
                   data-ci={ci}
                   style={{ ...fade, opacity: dim(ci) }}
-                  className={`lb lb${lb.lod}`}
+                  className={`lb lb${lb.lod}${fout?.has(lb.stationId) ? ' fout' : ''}`}
                   textAnchor="middle"
                 >
                   {/* sub-line hangs on the label's free side; absolute y so
@@ -751,8 +814,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               )
             }),
           )}
-          {/* system headboard — the map's own title plate, drawn into the
-              plano like a real map's imprint instead of floating chrome */}
+          {/* the woven signature patch — stitched into the cloth itself
+              instead of floating chrome */}
           {(() => {
             const c0 = net.corridors[0]
             const trunk = c0?.lines.find((l) => l.trunk)
@@ -762,30 +825,32 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
             const by = c0!.trunkY - U * 1.05
             return (
               <g className="headboard" data-ci={0} style={{ ...fade, opacity: dim(0) }} transform={`translate(${bx} ${by})`}>
-                <line x1={30} y1={-30} x2={30} y2={0} />
-                <line x1={222} y1={-30} x2={222} y2={0} />
-                <rect width={252} height={78} rx={10} />
-                <text className="hb-name" x={18} y={36}>traza</text>
-                <rect x={18} y={46} width={24} height={4.5} rx={2.2} fill="#0F4E9E" />
-                <rect x={46} y={46} width={13} height={4.5} rx={2.2} fill="#E2001A" />
-                <rect x={63} y={46} width={18} height={4.5} rx={2.2} fill="#6BBE45" />
-                <text className="hb-sub" x={18} y={68}>the metro map of agent sessions · local only</text>
+                <line className="hb-hang" x1={30} y1={-30} x2={30} y2={0} />
+                <line className="hb-hang" x1={222} y1={-30} x2={222} y2={0} />
+                <rect className="hb-patch" width={252} height={78} rx={8} />
+                <rect className="hb-stitch" x={5} y={5} width={242} height={68} rx={5} />
+                <text className="hb-mark" x={16} y={40}>~</text>
+                <text className="hb-name" x={38} y={40}>trenza</text>
+                <text className="hb-sub" x={18} y={64}>agent sessions, woven · local only</text>
               </g>
             )
           })()}
-          {/* service nameboards at each trunk's left terminus */}
+          {/* selvedge name tags at each weave's left edge */}
           {net.corridors.map((c, i) => {
             const trunk = c.lines.find((l) => l.trunk)
             const s0 = trunk?.stations[0]
             if (!trunk || !s0) return null
             const bx = s0.x - P * 1.9
+            const tw = Math.max(64, trunk.service.length * 6.6 + 40)
             return (
               <g key={`nb${i}`} className="nameboard" data-ci={i} style={{ ...fade, opacity: dim(i) }} transform={`translate(${bx} ${c.trunkY})`}>
-                <rect x={-22} y={-11} width={22} height={22} rx={5} fill={trunk.color} />
-                <text className="nb-code" x={-11} y={4} textAnchor="middle">
+                <rect className="nb-tag" x={-tw - 22} y={-10} width={tw} height={20} rx={4} />
+                <rect className="nb-stitch" x={-tw - 18} y={-6.5} width={tw - 8} height={13} rx={2.5} />
+                <rect x={-20} y={-10} width={20} height={20} rx={4} fill={trunk.color} />
+                <text className="nb-code" x={-10} y={3.6} textAnchor="middle">
                   S{i + 1}
                 </text>
-                <text className="nb-name" x={-30} y={4.5} textAnchor="end">
+                <text className="nb-name" x={-28} y={3.4} textAnchor="end">
                   {trunk.service}
                 </text>
               </g>
@@ -797,7 +862,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
         <div ref={tipRef} className="tip" style={{ left: hover.px + 14, top: hover.py - 34 }}>
           <b>{hover.s.name}</b>
           <span>
-            {hover.s.step.actor} · stop {hover.s.ord + 1}
+            {hover.s.step.actor} · knot {hover.s.ord + 1}
           </span>
         </div>
       )}
@@ -808,6 +873,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
 function serviceName(net: Network, lineId: string | undefined): string {
   for (const c of net.corridors) for (const l of c.lines) if (l.id === lineId) return l.trunk ? 'main' : l.service
   return 'main'
+}
+
+function clockOf(ts: number | null): string {
+  if (ts == null) return '—'
+  const d = new Date(ts)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 export default MapView

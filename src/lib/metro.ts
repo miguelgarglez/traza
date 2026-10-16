@@ -1,5 +1,5 @@
 import type { Session, Step, Thread, Weave } from './model.ts'
-import { redactText } from './redact.ts'
+import { stepTitle, buildTurns, callFailed, type Turn } from './title.ts'
 
 // metro.ts — turn a Session's threads into an octilinear (45°/90°) schematic:
 // the spine is a straight trunk line, branches arc off at 45° onto parallel
@@ -21,6 +21,9 @@ export interface Station {
   ord: number
   threadId: string
   lineId: string
+  /** the turn this step belongs to, and whether it opens it */
+  turnIdx?: number
+  turnStart?: boolean
 }
 
 export interface TrackSeg {
@@ -46,6 +49,8 @@ export interface Line {
   forkStation?: { lineId: string; stationId: string; inferred: boolean }
   mergeStation?: { lineId: string; stationId: string; inferred: boolean }
   worksOnly?: { count: number; label: string }
+  /** work turns along this line — they pace the replay */
+  turns: Turn[]
 }
 
 export interface Works {
@@ -85,13 +90,13 @@ export interface Network {
 }
 
 export const AGENT_COLORS: Record<string, string> = {
-  devin: '#0F4E9E', // L10 dark blue
-  codex: '#E2001A', // L2 red
-  cursor: '#6BBE45', // L5 green
-  atif: '#F6B100', // L3 yellow
-  unknown: '#7D6B2D', // L12 olive
+  devin: '#9a7ff0',
+  codex: '#4fb083',
+  cursor: '#6a9fe0',
+  atif: '#d89a4a',
+  unknown: '#a08b6c',
 }
-const EXTRA_COLORS = ['#8C2A93', '#00A3E0', '#E87500', '#4B4E9B'] // L9, L9B, L4, L7-ish
+const EXTRA_COLORS = ['#c46ad0', '#5cc4c9', '#e08a5f', '#8f9fe8']
 
 export const P = 26 // station pitch
 export const U = 72 // branch row offset
@@ -103,16 +108,11 @@ const short = (t: string, n = 26) => (t.length > n ? t.slice(0, n - 1).trimEnd()
 
 function tierOf(step: Step): Tier {
   if (step.actor === 'user') return 'major'
-  if ((step.calls ?? []).some((c) => c.ok === false)) return 'major'
+  if ((step.calls ?? []).some((c) => c.ok === false || callFailed(c))) return 'major'
   return 'local'
 }
 
-function nameOf(step: Step): string {
-  const t = step.title?.trim().replace(/^<[^>]+>\s*/, '')
-  if (t) return short(redactText(t).text)
-  if (step.calls?.length) return short(step.calls.map((c) => c.name).join(', '))
-  return step.kind
-}
+const nameOf = (step: Step): string => short(stepTitle(step))
 
 interface MarkBag {
   marks?: { anchorNode: number | null; label: string; count: number; steps: Step[] }[]
@@ -152,6 +152,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
     }),
     segs: [],
     row: 0,
+    turns: [],
   }
   if (trunk.stations.length) {
     trunk.segs.push({
@@ -362,6 +363,7 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
         segs: [],
         row,
         forkStation: { lineId: parentLine.id, stationId: forkSt!.id, inferred: forkInferred },
+        turns: [],
       }
       // fork -> (optional jog along the parent track) -> 45° descent -> row
       const pts: Pt[] = [{ x: forkSt.x, y: forkSt.y }]
@@ -423,6 +425,21 @@ export function buildCorridor(session: Session): Omit<Corridor, 'y0'> {
 
   // collapsed threads resolve their anchors now that every line is laid
   for (const t of session.threads) if (collapsed.has(t.id)) worksFrom(t)
+
+  // turns — consecutive agent work groups into one labelled turn; they pace
+  // the replay and name the stops a study rider dwells on
+  for (const l of lines) {
+    l.turns = buildTurns(l.stations.map((s) => s.step))
+    const pos = new Map<string, number>()
+    l.turns.forEach((t, i) => t.stepIds.forEach((id, j) => pos.set(id, i * 1000 + j)))
+    for (const s of l.stations) {
+      const v = pos.get(s.step.id)
+      if (v != null) {
+        s.turnIdx = Math.floor(v / 1000)
+        s.turnStart = v % 1000 === 0
+      }
+    }
+  }
 
   // 3. Works spurs: collapsed threads + per-thread marks -> "closed works"
   // stubs. Real exports generate hundreds of tiny marks; a corridor shows at

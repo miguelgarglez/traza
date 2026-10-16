@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Corridor, Line, Network, Station } from './lib/metro.ts'
-import type { Step } from './lib/model.ts'
+import type { ToolCall } from './lib/model.ts'
 import { redactText } from './lib/redact.ts'
 import { haptic } from './lib/haptics.ts'
+import { argSummary, callFailed, callOutcome, stepTitle, toolKind, type ToolKind } from './lib/title.ts'
 
 interface Props {
   net: Network
@@ -19,11 +20,20 @@ const KIND_ICON: Record<string, string> = {
   result: '↵',
   meta: '·',
 }
+const TK_STYLE: Record<ToolKind, string> = {
+  edit: 'edit', exec: 'exec', read: 'read', web: 'web', mcp: 'mcp', other: 'other',
+}
 
 function fmt(ts: number | null) {
   if (ts == null) return 'untimed'
   const d = new Date(ts)
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+function fmtDur(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+  return `${(ms / 60_000).toFixed(1)}m`
 }
 
 function Red({ text, mono }: { text: string; mono?: boolean }) {
@@ -36,19 +46,107 @@ function Red({ text, mono }: { text: string; mono?: boolean }) {
   )
 }
 
-function CallRow({ c }: { c: NonNullable<Step['calls']>[number] }) {
-  const [open, setOpen] = useState(false)
+/** does this text read like a diff? unified hunks or old/new string pairs */
+function looksDiffy(t: string): boolean {
+  const lines = t.split('\n')
+  let plus = 0
+  let minus = 0
+  for (const l of lines) {
+    if (l.startsWith('+') && !l.startsWith('+++')) plus++
+    else if (l.startsWith('-') && !l.startsWith('---')) minus++
+  }
+  return plus + minus >= 3 && /(^|\n)@@[^\n]*@@|^(---|\+\+\+) /m.test(t)
+}
+
+/** pull old/new string pairs out of an edit call's args → pseudo-diff */
+function editPair(args: string): { oldT: string; newT: string } | null {
+  try {
+    const o = JSON.parse(args) as Record<string, unknown>
+    const oldK = ['old_string', 'old_str', 'old_text', 'before', 'old'].find((k) => typeof o[k] === 'string')
+    const newK = ['new_string', 'new_str', 'new_text', 'after', 'new'].find((k) => typeof o[k] === 'string')
+    if (oldK && newK) return { oldT: o[oldK] as string, newT: o[newK] as string }
+  } catch {
+    /* not json */
+  }
+  return null
+}
+
+/** diff-aware block: +/− lines tinted, hunk headers blued */
+function DiffBlock({ text, cap = 2400 }: { text: string; cap?: number }) {
+  const shown = text.slice(0, cap)
+  const lines = shown.split('\n')
   return (
-    <div className={c.ok === false ? 'call bad' : 'call'}>
+    <pre className="block">
+      {lines.map((l, i) => {
+        const cls =
+          l.startsWith('+') && !l.startsWith('+++') ? 'dl-plus' : l.startsWith('-') && !l.startsWith('---') ? 'dl-minus' : l.startsWith('@@') ? 'dl-hunk' : ''
+        return cls ? (
+          <span key={i} className={cls}>
+            {l}
+            {'\n'}
+          </span>
+        ) : (
+          l + '\n'
+        )
+      })}
+      {text.length > cap ? `… ${text.length - cap} more chars` : null}
+    </pre>
+  )
+}
+
+function CallRow({ c, resultStationId, onJump }: { c: ToolCall; resultStationId?: string; onJump?: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const failed = callFailed(c)
+  const pair = c.args ? editPair(c.args) : null
+  const diffy = (c.args && looksDiffy(c.args)) || (c.result && looksDiffy(c.result))
+  const summary = argSummary(c)
+  const out = callOutcome(c)
+  return (
+    <div className={failed ? 'call bad' : 'call'}>
       <button className="callhead" onClick={() => setOpen(!open)} disabled={!c.args && !c.result}>
-        <i className={c.ok === false ? 'dot err' : 'dot ok'} />
-        <code>{c.name}</code>
+        <i className={failed ? 'dot err' : 'dot ok'} />
+        <code>
+          {c.name}
+          {summary ? <span style={{ color: 'var(--faint)' }}> {summary}</span> : null}
+        </code>
+        {out && <span className="chip err" style={{ marginLeft: 4 }}>{out}</span>}
         {(c.args || c.result) && <span className="chev">{open ? '▾' : '▸'}</span>}
       </button>
       {open && (
         <div className="callbody">
-          {c.args && <pre><Red text={c.args} mono /></pre>}
-          {c.result && <pre className="res"><Red text={c.result.slice(0, 2400)} mono /></pre>}
+          {pair ? (
+            <>
+              <div className="iseclbl open"><span>edit</span></div>
+              <pre className="block">
+                {pair.oldT.split('\n').slice(0, 40).map((l, i) => (
+                  <span key={`o${i}`} className="dl-minus">-{l}{'\n'}</span>
+                ))}
+                {pair.newT.split('\n').slice(0, 40).map((l, i) => (
+                  <span key={`n${i}`} className="dl-plus">+{l}{'\n'}</span>
+                ))}
+              </pre>
+            </>
+          ) : c.args ? (
+            diffy ? (
+              <DiffBlock text={c.args} />
+            ) : (
+              <pre className="block"><Red text={c.args} mono /></pre>
+            )
+          ) : null}
+          {c.result ? (
+            <>
+              <div className="iseclbl open"><span>result</span></div>
+              {looksDiffy(c.result) ? (
+                <DiffBlock text={c.result} />
+              ) : (
+                <pre className="block"><Red text={c.result.slice(0, 2400)} mono />{c.result.length > 2400 ? ' …' : null}</pre>
+              )}
+            </>
+          ) : resultStationId && onJump ? (
+            <button className="calllink" onClick={() => onJump(resultStationId)}>
+              the result lands at the next knot ↗
+            </button>
+          ) : null}
         </div>
       )}
     </div>
@@ -185,7 +283,9 @@ function mergesAt(corridor: Corridor, s: Station): Line[] {
 export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Props) {
   // mobile: tap the grab rail to swap compact ↔ expanded sheet heights
   const [full, setFull] = useState(false)
-  const hit = sel ? find(net, sel) : null
+  // memoized — find() returns a fresh object every call and effects below
+  // key on it; an unstable hit is an infinite setState loop
+  const hit = useMemo(() => (sel ? find(net, sel) : null), [net, sel])
   // a newly-opened sheet always starts compact — a previous session's
   // expanded detent must not leak into the next inspection
   const wasOpen = useRef(false)
@@ -240,6 +340,16 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
   const forks = branchesAt(corridor, s)
   const merges = mergesAt(corridor, s)
   const svc = line.trunk ? `S${net.corridors.indexOf(corridor) + 1}` : line.service
+  // elapsed since the previous step on this thread
+  const prev = line.stations[s.ord - 1]?.step
+  const elapsed = st.ts != null && prev?.ts != null ? st.ts - prev.ts : null
+  const turn = s.turnIdx != null ? line.turns[s.turnIdx] : undefined
+  const kinds = [...new Set((st.calls ?? []).map((c) => toolKind(c.name)))]
+  const failed = (st.calls ?? []).some(callFailed)
+  // a call step with unanswered calls links to the next station if it carries the result
+  const next = line.stations[s.ord + 1]
+  const nextIsResult = next?.step.kind === 'result' || next?.step.actor === 'tool'
+  const callLink = (c: ToolCall) => (!c.result && nextIsResult ? next!.id : undefined)
 
   return (
     <aside className={cls} aria-label="station detail">
@@ -247,10 +357,11 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
       <header>
         <span className="stopdot" style={{ borderColor: line.color }} />
         <div>
-          {/* the sheet earns the full title — the 26-char map label is only for the plano */}
-          <h2><Red text={st.title?.trim().replace(/^<[^>]+>\s*/, '') || s.name} /></h2>
+          <h2><Red text={stepTitle(st) || s.name} /></h2>
           <p className="sub">
-            stop {s.ord + 1} of {line.stations.length} · {svc}{line.trunk ? '' : ' branch'} · {fmt(st.ts)}
+            {turn ? `turn ${s.turnIdx! + 1} of ${line.turns.length} · ` : ''}
+            knot {s.ord + 1} of {line.stations.length} · {svc}{line.trunk ? '' : ' strand'} · {fmt(st.ts)}
+            {elapsed != null && elapsed >= 0 ? ` · +${fmtDur(elapsed)}` : ''}
           </p>
         </div>
         <button className="x" onClick={onClose} aria-label="close">✕</button>
@@ -259,7 +370,10 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
       <div className="chips">
         <span className={`chip a-${st.actor}`}>{st.actor}</span>
         <span className="chip">{KIND_ICON[st.kind] ?? ''} {st.kind}</span>
-        <span className="chip">{s.tier}</span>
+        {kinds.map((k) => (
+          <span key={k} className={`chip tk-${TK_STYLE[k]}`}>{k}</span>
+        ))}
+        {failed && <span className="chip err">failed</span>}
         {st.tokens?.input != null && (
           <span className="chip num">{fmtTok(st.tokens.input)}{st.tokens.output ? `→${fmtTok(st.tokens.output)}` : ''} tok</span>
         )}
@@ -270,38 +384,46 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
           {forks.map((l) => (
             <button key={l.id} className="xferrow" onClick={() => onJump(l.stations[0]!.id)}>
               <i style={{ background: l.color }} />
-              <span><b>{l.service}</b> departs from here{l.forkStation?.inferred ? ' ≈' : ''}</span>
+              <span><b>{l.service}</b> unthreads here{l.forkStation?.inferred ? ' ≈' : ''}</span>
               <em>→</em>
             </button>
           ))}
           {merges.map((l) => (
             <button key={l.id} className="xferrow" onClick={() => onJump(l.stations[l.stations.length - 1]!.id)}>
               <i style={{ background: l.color }} />
-              <span><b>{l.service}</b> returns here{l.mergeStation?.inferred ? ' ≈' : ''}</span>
+              <span><b>{l.service}</b> rejoins here{l.mergeStation?.inferred ? ' ≈' : ''}</span>
               <em>←</em>
             </button>
           ))}
           {merges.some((l) => l.mergeStation?.inferred) && (
-            <p className="inf">≈ inferred rejoin — the export didn’t record this merge; traza derived it from node order.</p>
+            <p className="inf">≈ inferred rejoin — the export didn’t record this merge; trenza derived it from node order.</p>
           )}
         </div>
       )}
 
       {st.thinking && (
-        <details className="think">
-          <summary>thinking</summary>
-          <p><Red text={st.thinking} /></p>
+        <details className="isec">
+          <summary className="iseclbl"><span className="chev">▸</span>reasoning</summary>
+          <div className="think"><p><Red text={st.thinking} /></p></div>
         </details>
       )}
       {/* a body that just repeats the title is noise — tool evidence earns the space instead */}
       {st.body && st.body.trim() !== (st.title?.trim().replace(/^<[^>]+>\s*/, '') ?? '') && (
         <div className="body"><p><Red text={st.body.slice(0, 4000)} />{st.body.length > 4000 && ' …'}</p></div>
       )}
-      {st.calls?.map((c) => <CallRow key={c.id} c={c} />)}
+      {st.calls && st.calls.length > 0 && (
+        <div className="iseclbl open"><span>tool calls <b className="cnt">· {st.calls.length}</b></span></div>
+      )}
+      {st.calls?.map((c) => <CallRow key={c.id} c={c} resultStationId={callLink(c)} onJump={onJump} />)}
+      {st.kind === 'result' && s.ord > 0 && (
+        <button className="calllink" onClick={() => onJump(line.stations[s.ord - 1]!.id)}>
+          ↩ the call that produced this
+        </button>
+      )}
 
       <footer>
-        <button onClick={() => onPrevNext(-1)} disabled={s.ord === 0}>← prev stop</button>
-        <button onClick={() => onPrevNext(1)} disabled={s.ord === line.stations.length - 1}>next stop →</button>
+        <button onClick={() => onPrevNext(-1)} disabled={s.ord === 0}>← prev knot</button>
+        <button onClick={() => onPrevNext(1)} disabled={s.ord === line.stations.length - 1}>next knot →</button>
       </footer>
     </aside>
   )
