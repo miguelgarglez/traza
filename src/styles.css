@@ -732,7 +732,10 @@ details.isec summary::-webkit-details-marker { display: none; }
   :root { --hdr: 42px; }
   .top { padding: 0 10px; gap: 8px; }
   .brand .sub, .tstats { display: none; }
-  .tsearch input { width: 120px; }
+  .tsearch input { width: 96px; }
+  /* header actions collapse to icons so the bar fits 375px; the words stay in the DOM for the accessible name */
+  .tacts .hbtn { padding: 4px 6px; font-size: 0; gap: 0; }
+  .tacts .hbtn svg { width: 14px; height: 14px; }
   .fbar { left: 8px; right: 8px; max-width: none; }
   .flabel { display: none; }
   .dock {
