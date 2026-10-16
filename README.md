@@ -1,10 +1,10 @@
 # traza
 
-*the metro map of your agent sessions*
+*agent sessions, woven*
 
-Drop an agent session export; traza draws it as the transit map of the
-work — every step a station, every subagent a branch line — then lets you
-ride the line and watch the session replay like a night service.
+Drop an agent session export; traza weaves it into cloth — every step a
+knot, every subagent a strand that unthreads and returns — then lets you
+run the shuttle and watch the work replay at reading pace.
 
 ![traza](docs/hero.png)
 
@@ -13,21 +13,25 @@ Everything happens in the browser; nothing leaves your machine.
 
 ## What it does
 
-- **Plano.** A session becomes an octilinear metro map: the main run is
-  the trunk line, each spawned subagent is a branch, work items hang off
-  the nearest station as little works spurs, and stations you can read
-  get their names up top — two-line labels (`ACTOR · STOP N`) at reading
-  zoom.
-- **Ride.** Press *follow the train* and the map dims to a warm sodium
-  night while a train replays the session along its real route. The LED
-  board morphs between stops; at the terminus the train parks, the
-  corridor flares, and the board reads **ALL CHANGE**.
-- **Explore.** Drag to pan, wheel/pinch to zoom, click stations and
-  interchanges, seek anywhere on the ride timeline. The finder
-  (`/` or ⌘K) flies to any station, corridor or work item by name.
-- **Honest chrome.** First paint is the plano and the wordmark — the dock,
-  tools and key only fade in once the opening camera beat lands, or the
-  moment you take the camera yourself.
+- **The weave.** A session becomes a piece of charcoal cloth: the main
+  run is the warp strand, each spawned subagent unthreads into its own
+  weft, work items hang off the nearest knot, and the selvedge stabs on
+  the edge name every session. Knots get real step titles —
+  `edit src/app.ts`, `npm test → failed` — never "message".
+- **Ask it questions.** *Time on the loom* is a waterfall: one lane per
+  thread, bars by real wall-clock duration, the longest spans flagged.
+  Click a bar and the camera flies to that exact knot. Filters dim by
+  agent, tool kind, errors-only, or full-text search across every step.
+- **Run the shuttle.** Press play and the lamps dim; a wooden shuttle
+  walks knot to knot while the inspector follows — reasoning, tool
+  arguments, diffs, tokens and elapsed time for every step. Three paces:
+  `tour`, `study`, or `real` (wall-clock scaled).
+- **Tethers.** When a Codex or Cursor reviewer's session was launched by
+  the main run, a gold thread ties its strand to the step that spawned
+  it — "codex picked it up here" is a real link you can ride along.
+- **Explore.** Drag the cloth with inertia, wheel/pinch to zoom, click
+  knots, `j`/`k` steps turn by turn, `/` searches the weave and flies
+  the camera to any knot, strand or work item by name.
 
 ## What it reads
 
@@ -40,8 +44,9 @@ use:
 - **Anything text-shaped** — `.jsonl`, `.ndjson`, `.txt`, `.md`, `.log`,
   `.csv` fall through to a generic event stream parser
 
-Drop a file, a folder, or a whole export directory. Three real sessions
-ship as a demo so you can ride the plano before you have an export handy.
+Drop a file, a folder, or a whole export directory. Three synthetic
+sessions ship as a demo so you can run the shuttle before you have an
+export handy.
 
 ## How it works
 
@@ -49,14 +54,14 @@ ship as a demo so you can ride the plano before you have an export handy.
   There is no server, no account, no telemetry; secrets and paths are
   redacted before anything touches the DOM. `traza.html` in this repo is
   the whole product bundled into a single file — it runs from `file://`.
-- **Map layout is real.** Stations, junctions and parallel corridors are
-  solved by a dedicated graph pass (`src/lib/metro.ts`) that keeps every
-  track octilinear and forward-only, then a label-placement pass that
-  reserves collision boxes — including the sub-line strip — so names
-  never tangle.
-- **The ride follows geometry.** The train isn't animated along a
-  timeline; it interpolates the actual track polylines
-  (`src/lib/ride.ts`), so switches, merges and express skips are real.
+- **The weave is solved, not drawn.** Strands, unthreads and parallel
+  runs are laid out by a dedicated graph pass (`src/lib/metro.ts`) that
+  keeps every thread readable, then a label-placement pass reserves
+  collision boxes so names never tangle.
+- **The shuttle follows geometry.** It isn't animated along a timeline;
+  it interpolates the actual strand polylines (`src/lib/ride.ts`), and
+  `study` pace dwells per turn — consecutive calls, results and
+  reasoning grouped into one labelled beat.
 - **Direct manipulation everywhere.** The camera is imperative: drag,
   wheel and pinch cancel flights, panning works while the inspector
   sheet is open, and on a phone the sheet springs between detents and
@@ -99,3 +104,7 @@ node test/perf-check.mjs    # 1200-step network, display-rate panning, reduced m
 React 19 + TypeScript + Vite, hand-rolled SVG + imperative camera, zero
 runtime dependencies beyond fonts and haptics. No map library, no
 animation library — the whole thing is ~90 KB of product code.
+
+## License
+
+MIT
