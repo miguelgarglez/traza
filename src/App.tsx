@@ -1244,18 +1244,23 @@ export default function App() {
         <div
           className={`gsign g${guide}`}
           role="note"
-          style={
-            gpos
-              ? {
-                  left: Math.max(140, Math.min(innerWidth - 140, gpos.x)),
-                  top: Math.max(14, gpos.y - (guide === 3 ? 108 : 128)),
-                  bottom: 'auto',
-                  transform: 'translateX(-50%)',
-                }
-              : undefined
-          }
+          style={{ top: gpos ? Math.max(60, Math.min(innerHeight - 220, gpos.y - 34)) : '30%' }}
         >
-          <span className="string" />
+          {/* thread runs from the label's right edge to the subject */}
+          {gpos &&
+            (() => {
+              const sy = Math.max(60, Math.min(innerHeight - 220, gpos.y - 34)) + 30
+              const dx = gpos.x - 240
+              const dy = gpos.y - sy
+              const len = Math.hypot(dx, dy)
+              if (dx < 26 || len < 30) return null
+              return (
+                <span
+                  className="gthread"
+                  style={{ ['--gl' as string]: `${Math.max(0, len - 10)}px`, ['--ga' as string]: `${(Math.atan2(dy, dx) * 180) / Math.PI}deg` }}
+                />
+              )
+            })()}
           <div className="sign">
             <b>{guide === 1 ? 'every knot is a step the agent took' : guide === 2 ? 'a strand unthreads here — a subagent ran alongside' : 'run the shuttle'}</b>
             <p>

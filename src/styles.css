@@ -1,7 +1,9 @@
 /* trenza — the loom of agent sessions.
    Charcoal cloth, flax for labels, one inked strand per agent; amber is
-   reserved for the shuttle and the light it throws. A serif voice for
-   what the work said. The weave is the composition; chrome is annotation. */
+   reserved for the shuttle and the light it throws. A humanist sans runs
+   the loom, condensed caps tag the weave like garment labels, tabular
+   digits keep the time, and a serif voice is kept only for what the work
+   itself said. The weave is the composition; chrome is annotation. */
 
 :root {
   --bg: #141419;
@@ -20,6 +22,8 @@
   --cursor: #6a9fe0;
   --atif: #d89a4a;
   --hot: #e0603f;
+  --sans: 'Fira Sans', system-ui, 'Segoe UI', sans-serif;
+  --cond: 'Fira Sans Condensed', 'Fira Sans', system-ui, sans-serif;
   --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --serif: 'Newsreader', 'Iowan Old Style', Georgia, serif;
   --ease: cubic-bezier(0.22, 0.8, 0.3, 1);
@@ -33,7 +37,7 @@ html, body, #root { height: 100%; }
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 13px;
   line-height: 1.45;
   overflow: hidden;
@@ -54,16 +58,16 @@ button:active { transform: translateY(0.5px); }
   background: var(--bg2); z-index: 20; position: relative;
 }
 .brand { display: flex; align-items: baseline; gap: 8px; flex: none; }
-.brand .mark { font-family: var(--serif); font-style: italic; font-size: 19px; color: var(--dim); transform: translateY(1px); }
-.brand .word { font-family: var(--serif); font-size: 19px; font-weight: 500; letter-spacing: 0.01em; }
+.brand .mark { font-family: var(--cond); font-size: 20px; font-weight: 600; color: var(--dim); transform: translateY(1px); }
+.brand .word { font-family: var(--cond); font-size: 20px; font-weight: 600; letter-spacing: 0.05em; }
 .brand .sub { font-size: 9.5px; color: var(--faint); letter-spacing: 0.06em; }
 
 .strands { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
 .strands::-webkit-scrollbar { display: none; }
 .stab {
   flex: none; display: flex; align-items: center; gap: 6px;
-  padding: 4px 10px; border-radius: 6px;
-  color: var(--dim); font-size: 11.5px; white-space: nowrap;
+  padding: 4px 10px; border-radius: 3px;
+  color: var(--dim); font-family: var(--cond); font-size: 12.5px; letter-spacing: 0.02em; white-space: nowrap;
   max-width: 200px; overflow: hidden; text-overflow: ellipsis;
 }
 .stab:hover { background: var(--bg3); color: var(--ink); }
@@ -81,7 +85,7 @@ button:active { transform: translateY(0.5px); }
 .tsearch .tic { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 11px; pointer-events: none; }
 .tsearch .tcount { font-size: 10px; color: var(--faint); margin-left: 6px; }
 
-.tstats { margin-left: auto; flex: none; font-size: 10.5px; color: var(--faint); white-space: nowrap; }
+.tstats { margin-left: auto; flex: none; font-family: var(--mono); font-size: 10px; color: var(--faint); white-space: nowrap; }
 .tstats b { color: var(--dim); font-weight: 500; }
 .tstats .sep { margin: 0 6px; opacity: 0.5; }
 .tstats .hot { color: var(--dim); }
@@ -109,7 +113,7 @@ button:active { transform: translateY(0.5px); }
 .flabel { font-size: 9.5px; color: var(--faint); letter-spacing: 0.09em; flex: none; }
 .ftog {
   flex: none; display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 9px; border-radius: 99px; font-size: 10.5px; color: var(--ink);
+  padding: 3px 9px; border-radius: 99px; font-family: var(--cond); font-size: 11px; letter-spacing: 0.03em; color: var(--ink);
   border: 1px solid var(--line-soft); background: transparent; white-space: nowrap;
 }
 .ftog:hover { border-color: var(--faint); }
@@ -131,12 +135,14 @@ button:active { transform: translateY(0.5px); }
     var(--bg);
   transition: background 1s var(--ease);
 }
-/* the warp: faint vertical threads the strands weave across */
+/* the warp: fine vertical threads at cloth density, crossed by a loose
+   weft — a weave, not graph paper */
 .mapwrap::before {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background:
-    repeating-linear-gradient(90deg, rgba(237, 217, 180, 0.022) 0 1px, transparent 1px 52px),
-    repeating-linear-gradient(0deg, rgba(237, 217, 180, 0.014) 0 1px, transparent 1px 52px);
+    repeating-linear-gradient(90deg, rgba(237, 217, 180, 0.02) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(0deg, rgba(237, 217, 180, 0.016) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(90deg, rgba(237, 217, 180, 0.035) 0 1px, transparent 1px 52px);
 }
 .plano {
   width: 100%; height: 100%; display: block; position: relative; z-index: 1;
@@ -152,7 +158,7 @@ button:active { transform: translateY(0.5px); }
 
 /* fabric swatch behind each session's weave */
 .zone {
-  fill: #1f1f28; opacity: 0.55; rx: 26;
+  fill: #1f1f28; opacity: 0.55; rx: 9;
   stroke: var(--line-soft); stroke-width: 1;
   stroke-dasharray: 0.012 0.006;
   transition: opacity 0.25s, fill 0.8s var(--ease);
@@ -239,38 +245,32 @@ button:active { transform: translateY(0.5px); }
 /* frayed ends — abandoned offshoots unravel */
 .fray { fill: none; stroke-width: 1.4; stroke-linecap: round; }
 .wbox { fill: var(--paper); stroke: var(--line); stroke-width: 1.2; }
-.wtag { font-family: var(--mono); font-size: 8.5px; fill: var(--dim); text-anchor: middle; }
+.wtag { font-family: var(--cond); font-size: 9px; letter-spacing: 0.04em; fill: var(--dim); text-anchor: middle; }
 .works.sel .wbox { stroke: var(--ink); }
 
 /* labels — mono, warm, alternating sides like the old map's */
-.lb { font-family: var(--mono); fill: var(--ink); opacity: 0.92; }
+.lb { font-family: var(--sans); font-size: 11.5px; fill: var(--ink); opacity: 0.92; }
 .lb0 { font-size: 10px; }
 .lb1 { font-size: 9px; opacity: 0.7; }
 .lb2 { display: none; }
 .plano[data-z='near'] .lb2 { display: inline; font-size: 8.5px; opacity: 0.55; }
 .plano[data-z='far'] .lb1, .plano[data-z='far'] .lb2 { display: none; }
-.lbsub { font-family: var(--mono); font-size: 7.5px; fill: var(--dim); opacity: 0.9; }
-.ftag { font-family: var(--mono); font-size: 8px; fill: var(--faint); font-style: italic; }
+.lbsub { font-family: var(--mono); font-size: 8px; fill: #b3a685; opacity: 0.95; }
+.ftag { font-family: var(--cond); font-size: 9px; fill: var(--dim); font-style: italic; letter-spacing: 0.04em; }
 
 /* selvedge name tags at each session's left edge */
 .nameboard .nb-tag { fill: var(--paper-hi); stroke: var(--line); stroke-width: 1; }
 .nameboard .nb-stitch { fill: none; stroke: var(--faint); stroke-width: 0.7; stroke-dasharray: 2.5 2; }
-.nameboard .nb-code { font-family: var(--mono); font-size: 9px; fill: var(--bg); font-weight: 600; }
-.nameboard .nb-name { font-family: var(--mono); font-size: 10px; fill: var(--dim); }
+.nameboard .nb-code { font-family: var(--cond); font-size: 9px; fill: var(--bg); font-weight: 600; }
+.nameboard .nb-name { font-family: var(--cond); font-size: 10.5px; fill: var(--ink); letter-spacing: 0.03em; }
 .stage.lamp .nb-name { fill: #6d6859; }
 
-/* the woven signature patch — brand lives in the cloth, not in chrome */
-.headboard .hb-patch { fill: var(--paper-hi); stroke: var(--line); stroke-width: 1; }
-.headboard .hb-stitch { fill: none; stroke: var(--faint); stroke-width: 0.8; stroke-dasharray: 3 2.4; }
-.headboard .hb-hang { stroke: var(--faint); stroke-width: 1; }
-.headboard .hb-name { font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 26px; fill: var(--ink); }
-.headboard .hb-mark { font-family: var(--serif); font-style: italic; font-size: 26px; fill: var(--dim); }
-.headboard .hb-sub { font-family: var(--mono); font-size: 8.5px; fill: var(--faint); letter-spacing: 0.04em; }
+
 
 /* tethers — a dashed flax thread crossing between sessions */
 .tether { fill: none; stroke: var(--dim); stroke-width: 1.2; stroke-dasharray: 0.016 0.012; stroke-linecap: round; opacity: 0.8; }
 .tether-dot { fill: var(--dim); }
-.tether-lb { font-family: var(--mono); font-size: 8px; fill: var(--dim); font-style: italic; opacity: 0.95; }
+.tether-lb { font-family: var(--cond); font-size: 9px; fill: var(--dim); font-style: italic; letter-spacing: 0.04em; opacity: 0.95; }
 
 /* filtered out — knots and strands dim under an active filter */
 .plano.filtered .fout { opacity: 0.07; transition: opacity 0.3s; }
@@ -287,7 +287,7 @@ button:active { transform: translateY(0.5px); }
 
 /* ============================ pattern card (legend) ============================ */
 .key {
-  position: absolute; left: 14px; bottom: 14px; z-index: 15;
+  position: absolute; left: 14px; bottom: 84px; z-index: 15;
   width: min(330px, calc(100vw - 28px));
   background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: var(--shadow); overflow: hidden;
@@ -297,7 +297,7 @@ button:active { transform: translateY(0.5px); }
   width: 100%; display: flex; align-items: center; gap: 10px;
   padding: 9px 13px; text-align: left;
 }
-.keyhead b { font-family: var(--serif); font-style: italic; font-size: 14px; font-weight: 500; color: var(--ink); }
+.keyhead b { font-family: var(--cond); font-size: 14px; font-weight: 600; letter-spacing: 0.05em; color: var(--ink); }
 .keyhead span { flex: 1; font-size: 10px; color: var(--faint); }
 .keyhead i { font-style: normal; color: var(--faint); font-size: 10px; }
 .keybody { border-top: 1px solid var(--line-soft); padding: 8px 10px 10px; }
@@ -352,11 +352,15 @@ button:active { transform: translateY(0.5px); }
   content: ''; position: absolute; left: 0; right: 0; top: 3px; height: 0;
   border-top: 1px dashed var(--line-soft); pointer-events: none;
 }
-.paces { display: flex; border: 1px solid var(--line-soft); border-radius: 99px; padding: 2px; gap: 1px; }
-.paces button {
-  padding: 3px 10px; border-radius: 99px; font-size: 10px; color: var(--faint);
+.paces {
+  display: flex; border: 1px solid var(--line-soft); border-radius: 3px; padding: 2px; gap: 1px;
+  box-shadow: inset 0 0 0 1px rgba(230, 220, 192, 0.04);
 }
-.paces button.on { background: var(--paper-hi); color: var(--ink); font-weight: 600; }
+.paces button {
+  padding: 3px 10px; border-radius: 2px; font-family: var(--cond);
+  font-size: 10.5px; letter-spacing: 0.06em; color: var(--faint);
+}
+.paces button.on { background: var(--ink); color: var(--bg); font-weight: 600; }
 .paces button:not(.on):hover { color: var(--ink); }
 .svcpick { display: flex; align-items: center; gap: 4px; }
 .svcpick button { color: var(--faint); font-size: 13px; padding: 2px 6px; }
@@ -379,41 +383,49 @@ button:active { transform: translateY(0.5px); }
 .led { display: flex; gap: 7px; align-items: baseline; min-width: 0; }
 .led b, .led span { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .led .led-tag { font-family: var(--mono); font-style: normal; font-size: 9px; color: var(--faint); letter-spacing: 0.08em; flex: none; }
-.ridesub { font-size: 9px; color: var(--faint); }
-/* the loomline — scrubber on real wall-clock, full width of the beam */
+.ridesub { font-family: var(--mono); font-size: 9px; color: var(--faint); }
+/* the loomline — the loom's reed: warp teeth across the full beam, the
+   finished cloth filling in amber as the shuttle passes */
 .loomline { grid-column: 1 / -1; position: relative; height: 27px; cursor: pointer; margin-bottom: 2px; }
 .loomline .ltrack {
-  position: absolute; left: 0; right: 0; top: 18px; height: 3px;
-  background: var(--line-soft); border-radius: 2px;
+  position: absolute; left: 0; right: 0; top: 14px; height: 9px;
+  background:
+    repeating-linear-gradient(90deg, rgba(230, 220, 192, 0.16) 0 1px, transparent 1px 7px),
+    var(--bg);
+  border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
 }
 .loomline .lfill {
-  position: absolute; left: 0; top: 18px; height: 3px;
-  background: var(--amber); border-radius: 2px; transition: width 0.15s linear;
+  position: absolute; left: 0; top: 15px; height: 7px;
+  background:
+    repeating-linear-gradient(90deg, rgba(20, 20, 25, 0.35) 0 1px, transparent 1px 7px),
+    var(--amber);
+  transition: width 0.15s linear;
 }
 .loomline .ltick {
-  position: absolute; top: 16px; width: 1px; height: 7px; background: var(--faint); opacity: 0.5;
+  position: absolute; top: 12px; width: 1px; height: 12px; background: var(--dim); opacity: 0.75;
 }
 .loomline .lturn {
-  position: absolute; top: 12px; width: 4px; height: 4px; border-radius: 50%;
-  background: var(--dim); transform: translateX(-50%);
+  position: absolute; top: 8px; width: 3px; height: 3px; border-radius: 0;
+  background: var(--dim); transform: translateX(-50%) rotate(45deg);
 }
 .loomline .lturn.user { background: var(--ink); }
 .loomline .lturn.err { background: var(--hot); }
 .loomline .lhead {
-  position: absolute; top: 9px; width: 9px; height: 9px; border-radius: 50%;
-  background: var(--amber); transform: translateX(-50%);
-  box-shadow: 0 0 8px rgba(223,168,77,0.6); cursor: ew-resize;
+  position: absolute; top: 11px; width: 11px; height: 11px; border-radius: 50% 50% 50% 0;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--amber); box-shadow: 0 0 8px rgba(223,168,77,0.6); cursor: ew-resize;
 }
 .loomline .lclock {
   position: absolute; top: 0; transform: translateX(-50%);
-  font-size: 8.5px; color: var(--amber); white-space: nowrap; pointer-events: none;
+  font-family: var(--mono); font-size: 8.5px; color: var(--amber); white-space: nowrap; pointer-events: none;
 }
 .fare { display: flex; align-items: baseline; gap: 5px; flex: none; }
-.fare b { font-size: 13px; color: var(--amber); font-weight: 500; font-variant-numeric: tabular-nums; }
-.fare span { font-size: 9px; color: var(--faint); }
-.speeds { display: flex; gap: 1px; border: 1px solid var(--line-soft); border-radius: 99px; padding: 2px; }
-.speeds button { padding: 3px 8px; border-radius: 99px; font-size: 9.5px; color: var(--faint); }
-.speeds button.on { background: var(--paper-hi); color: var(--ink); }
+.fare b { font-family: var(--mono); font-size: 13px; color: var(--amber); font-weight: 500; font-variant-numeric: tabular-nums; }
+.fare span { font-family: var(--cond); font-size: 9.5px; letter-spacing: 0.05em; color: var(--faint); }
+.speeds { display: flex; gap: 1px; border: 1px solid var(--line-soft); border-radius: 3px; padding: 2px; }
+.speeds button { padding: 3px 8px; border-radius: 2px; font-family: var(--mono); font-size: 9.5px; color: var(--faint); }
+.speeds button.on { background: var(--ink); color: var(--bg); }
 .speedcycle { display: none; }
 .followpill {
   position: absolute; left: 50%; transform: translateX(-50%); bottom: 84px; z-index: 14;
@@ -423,29 +435,41 @@ button:active { transform: translateY(0.5px); }
 }
 .followpill:hover { border-color: var(--dim); color: var(--ink); }
 
-/* the selvedge — session tabs sewn to the cloth's left edge, tracking pan */
+/* the selvedge — a stitched band down the cloth's left edge; each
+   session's label is sewn onto it and tracks the weave as it pans */
 .selv {
   position: absolute; left: 0; top: 0; bottom: 0; z-index: 9;
   width: 0; pointer-events: none;
 }
+.selv::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 7px;
+  background:
+    repeating-linear-gradient(to bottom, var(--dim) 0 2.5px, transparent 2.5px 7px) left 2px top / 2.5px 100% no-repeat,
+    linear-gradient(to right, rgba(230, 220, 192, 0.07), transparent 7px);
+  border-right: 1px solid var(--line-soft);
+}
 .selv-tab {
-  position: absolute; left: 0; transform: translateY(-50%);
+  position: absolute; left: 7px; transform: translateY(-50%);
   display: flex; align-items: center; gap: 7px; max-width: 190px;
   padding: 4px 10px 4px 7px;
-  background: var(--paper); border: 1px solid var(--line); border-left: 0;
-  border-radius: 0 8px 8px 0;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: 0 3px 3px 0;
+  box-shadow: inset 0 0 0 1px var(--paper), inset 0 0 0 2px transparent, 3px 3px 14px rgba(0,0,0,0.35);
   pointer-events: auto; cursor: pointer; text-align: left;
-  box-shadow: 4px 4px 18px rgba(0,0,0,0.35);
   transition: opacity 0.3s;
 }
-.selv-tab:hover { background: var(--paper-hi); }
-.selv-tab .sv-notch { width: 4px; align-self: stretch; border-radius: 2px; flex: none; }
+.selv-tab::before {
+  content: ''; position: absolute; left: -7px; top: 50%; width: 7px; height: 0;
+  border-top: 1px dashed var(--faint);
+}
+.selv-tab:hover { background: var(--paper-hi); border-color: var(--faint); }
+.selv-tab .sv-notch { width: 4px; align-self: stretch; border-radius: 1.5px; flex: none; }
 .selv-tab .sv-code {
-  font-size: 8px; font-weight: 600; color: var(--bg); flex: none;
-  padding: 1.5px 5px; border-radius: 3px;
+  font-family: var(--cond); font-size: 9px; font-weight: 600; color: var(--bg); flex: none;
+  padding: 1.5px 5px; border-radius: 2px; letter-spacing: 0.05em;
 }
 .selv-tab .sv-name {
-  font-family: var(--mono); font-size: 9.5px; color: var(--dim);
+  font-family: var(--cond); font-size: 10px; letter-spacing: 0.03em; color: var(--dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
 }
 /* the shuttle's read — the current turn's words riding beside it */
@@ -470,12 +494,12 @@ button:active { transform: translateY(0.5px); }
   flex: none; display: flex; align-items: center; gap: 12px;
   padding: 8px 14px; border-bottom: 1px solid var(--line-soft);
 }
-.fallhead b { font-family: var(--serif); font-style: italic; font-size: 14px; font-weight: 500; }
+.fallhead b { font-family: var(--cond); font-size: 15px; font-weight: 600; letter-spacing: 0.05em; }
 .fallhead .fh-meta { font-size: 10px; color: var(--faint); }
 .fallhead .x { margin-left: auto; }
 .fallbody { flex: 1; overflow: auto; position: relative; }
 .fall-svg { display: block; }
-.flane-name { font-family: var(--mono); font-size: 9px; fill: var(--dim); }
+.flane-name { font-family: var(--cond); font-size: 9.5px; letter-spacing: 0.05em; fill: var(--dim); }
 .fbar-rect { cursor: pointer; transition: opacity 0.15s; }
 .fbar-rect:hover { opacity: 0.8; }
 .fbar-rect.sel { stroke: var(--ink); stroke-width: 1.4; }
@@ -485,7 +509,7 @@ button:active { transform: translateY(0.5px); }
 .fcp { fill: none; stroke: var(--hot); stroke-width: 1; stroke-dasharray: 3 2; }
 .fgap { fill: var(--faint); opacity: 0.25; }
 .fdur { font-family: var(--mono); font-size: 8px; fill: var(--bg); font-weight: 600; pointer-events: none; }
-.fempty { font-family: var(--mono); font-size: 9px; fill: var(--faint); font-style: italic; }
+.fempty { font-family: var(--sans); font-size: 10px; fill: var(--faint); font-style: italic; }
 
 /* ============================ inspector ============================ */
 .inspector {
@@ -572,14 +596,25 @@ details.isec summary::-webkit-details-marker { display: none; }
 .redflag { color: var(--hot); font-size: 9px; margin-right: 4px; }
 .mono { font-family: var(--mono); }
 .inspector footer {
-  display: flex; gap: 8px; padding: 11px 16px; border-top: 1px solid var(--line-soft);
+  display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-top: 1px solid var(--line-soft);
 }
-.inspector footer button {
-  flex: 1; padding: 7px 10px; border: 1px solid var(--line-soft); border-radius: 8px;
-  font-size: 10.5px; color: var(--dim);
+/* knot-stepping — follow the thread knot by knot, no buttons */
+.kstep {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px;
+  font-family: var(--cond); font-size: 11px; letter-spacing: 0.04em; color: var(--dim);
 }
-.inspector footer button:hover:not(:disabled) { color: var(--ink); border-color: var(--faint); }
-.inspector footer button:disabled { opacity: 0.35; cursor: default; }
+.kstep .kdot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  border: 1.4px solid var(--dim); background: transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.kstep:hover:not(:disabled) { color: var(--ink); }
+.kstep:hover:not(:disabled) .kdot { border-color: var(--ink); background: var(--ink); }
+.kstep:disabled { opacity: 0.3; cursor: default; }
+.inspector footer .kcur {
+  flex: 1; text-align: center; font-family: var(--mono); font-size: 9px; color: var(--faint);
+  letter-spacing: 0.06em;
+}
 .wsteps { list-style: none; padding: 0 16px; }
 .wsteps li { padding: 5px 0; font-size: 11px; border-bottom: 1px dashed var(--line-soft); }
 .wsteps li b { color: var(--faint); font-weight: 400; margin-right: 8px; font-size: 9px; }
@@ -593,16 +628,27 @@ details.isec summary::-webkit-details-marker { display: none; }
 }
 
 /* ============================ guide tags ============================ */
-.gsign { position: absolute; z-index: 22; pointer-events: none; }
-.gsign .string { position: absolute; left: 50%; top: 100%; width: 1px; height: 34px; background: var(--faint); }
+/* the guide — a label stitched straight onto the selvedge, a thread
+   running out to the thing it teaches instead of a floating card */
+.gsign { position: absolute; left: 0; z-index: 22; pointer-events: none; }
+.gsign .gthread {
+  position: absolute; top: 30px; left: 100%; height: 0; width: var(--gl, 0px);
+  border-top: 1px dashed var(--dim); opacity: 0.85;
+  transform-origin: left center; transform: rotate(var(--ga, 0deg));
+}
 .gsign .sign {
-  pointer-events: auto; width: 240px;
-  background: var(--paper-hi); border: 1px solid var(--line); border-radius: 10px;
-  padding: 11px 13px 9px; box-shadow: var(--shadow);
-  transform: rotate(-1.6deg);
+  pointer-events: auto; position: relative; width: 232px;
+  background: var(--paper-hi); border: 1px solid var(--line); border-left: 0;
+  border-radius: 0 3px 3px 0;
+  padding: 10px 12px 9px 17px; box-shadow: var(--shadow);
   animation: tagdrop 0.45s var(--ease);
 }
-.gsign .sign b { display: block; font-family: var(--serif); font-size: 15px; font-weight: 500; line-height: 1.3; }
+.gsign .sign::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 7px;
+  background: repeating-linear-gradient(to bottom, var(--dim) 0 2.5px, transparent 2.5px 7px) left 2px top / 2.5px 100% no-repeat;
+  border-right: 1px solid var(--line-soft);
+}
+.gsign .sign b { display: block; font-family: var(--cond); font-size: 14px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.3; }
 .gsign .sign p { font-size: 10.5px; color: var(--dim); margin-top: 4px; line-height: 1.5; }
 .gsign .gsteps { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .gsign .gsteps span { font-size: 9px; color: var(--faint); }
@@ -690,14 +736,24 @@ details.isec summary::-webkit-details-marker { display: none; }
   .fbar { left: 8px; right: 8px; max-width: none; }
   .flabel { display: none; }
   .dock {
-    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
-    column-gap: 9px; padding: 4px 10px calc(6px + env(safe-area-inset-bottom));
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'line line line'
+      'tr tr tr'
+      'info fare spd';
+    column-gap: 10px; row-gap: 5px; padding: 4px 10px calc(8px + env(safe-area-inset-bottom));
   }
+  .dock .loomline { grid-area: line; }
+  .dock .paces, .dock .svcpick { display: none; }
+  .dock .transport { grid-area: tr; justify-content: center; }
+  .dock .rideinfo { grid-area: info; }
+  .dock .fare { grid-area: fare; }
+  .dock .speedcycle { grid-area: spd; }
   .led { max-width: none; }
   .speeds { display: none; }
   .speedcycle {
     display: inline-flex; padding: 4px 10px; border: 1px solid var(--line-soft);
-    border-radius: 99px; font-size: 10px; color: var(--dim);
+    border-radius: 3px; font-family: var(--mono); font-size: 10px; color: var(--dim);
   }
   .key { left: 8px; bottom: auto; top: calc(var(--hdr) + 8px); }
   .followpill { bottom: auto; top: calc(var(--hdr) + 8px); }

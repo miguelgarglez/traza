@@ -585,7 +585,7 @@ export function buildNetwork(weave: Weave): Network {
     }
     for (const w of c.works) w.y += y
     for (const l of c.labels) l.y += y
-    y += c.height + U * 1.6
+    y += c.height + U * 1.0
   })
   const x1 = Math.max(600, ...corridors.flatMap((c) => c.lines.flatMap((l) => l.segs.flatMap((s) => s.pts.map((p) => p.x)))), ...corridors.flatMap((c) => c.works.map((w) => w.x)))
   // nameboards anchor left of each trunk's first stop; reserve the room

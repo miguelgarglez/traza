@@ -422,8 +422,13 @@ export default function Inspector({ net, sel, onClose, onJump, onPrevNext }: Pro
       )}
 
       <footer>
-        <button onClick={() => onPrevNext(-1)} disabled={s.ord === 0}>← prev knot</button>
-        <button onClick={() => onPrevNext(1)} disabled={s.ord === line.stations.length - 1}>next knot →</button>
+        <button className="kstep" onClick={() => onPrevNext(-1)} disabled={s.ord === 0}>
+          ‹ <i className="kdot" /> knot {s.ord}
+        </button>
+        <span className="kcur">knot {s.ord + 1} of {line.stations.length}</span>
+        <button className="kstep" onClick={() => onPrevNext(1)} disabled={s.ord === line.stations.length - 1}>
+          knot {s.ord + 2} <i className="kdot" /> ›
+        </button>
       </footer>
     </aside>
   )

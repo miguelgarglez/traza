@@ -132,6 +132,23 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
   }
   const selvRef = useRef<HTMLDivElement>(null)
   const slabelRef = useRef<SVGGElement>(null)
+  // shuttle pose kept in world units; a floor on screen size keeps the
+  // boat silhouette (points, waist, bobbin) readable at overview zoom
+  const trainPose = useRef<{ wx: number; wy: number; angle: number; visible: boolean } | null>(null)
+  const ghostPose = useRef<{ wx: number; wy: number; angle: number; visible: boolean } | null>(null)
+  const poseTrain = () => {
+    const p = trainPose.current
+    const g = trainRef.current
+    if (!p || !g) return
+    const ss = Math.min(2.8, Math.max(1, 0.62 / cam.current.k))
+    g.setAttribute('transform', `translate(${p.wx} ${p.wy}) rotate(${p.angle}) scale(${ss})`)
+    g.style.display = p.visible ? '' : 'none'
+    const q = slabelRef.current
+    if (q) {
+      q.setAttribute('transform', `translate(${p.wx + 17 * ss} ${p.wy - 20 * ss}) scale(${ss})`)
+      q.style.display = p.visible ? '' : 'none'
+    }
+  }
   const drag = useRef<{ px: number; py: number; cx: number; cy: number; moved: boolean; panning?: boolean } | null>(null)
   const pinch = useRef<{ d: number; k: number } | null>(null)
   const lastKiv = useRef(0)
@@ -191,6 +208,7 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
         el.style.top = `${Math.max(56, Math.min(vh - 150, py))}px`
       }
     }
+    if (trainPose.current?.visible) poseTrain()
   }
 
   const toScreen = (wx: number, wy: number) => {
@@ -287,15 +305,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     setTrain: (wx, wy, angle, visible, color) => {
       const g = trainRef.current
       if (!g) return
-      g.setAttribute('transform', `translate(${wx} ${wy}) rotate(${angle})`)
-      g.style.display = visible ? '' : 'none'
+      trainPose.current = { wx, wy, angle, visible }
+      poseTrain()
       if (color) g.style.setProperty('--train', color)
-      // the shuttle's read rides beside it, unrotated
-      const q = slabelRef.current
-      if (q) {
-        q.setAttribute('transform', `translate(${wx + 16} ${wy - 18})`)
-        q.style.display = visible ? '' : 'none'
-      }
       // platform lights: the station the train is at or approaching glows
       if (!visible) {
         setLit(null)
@@ -363,7 +375,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     setGhost: (wx, wy, angle, visible, color) => {
       const g = ghostRef.current
       if (!g) return
-      g.setAttribute('transform', `translate(${wx} ${wy}) rotate(${angle})`)
+      ghostPose.current = { wx, wy, angle, visible }
+      const ss = Math.min(2.8, Math.max(1, 0.62 / cam.current.k))
+      g.setAttribute('transform', `translate(${wx} ${wy}) rotate(${angle}) scale(${ss})`)
       g.style.display = visible ? '' : 'none'
       if (color) g.style.setProperty('--train', color)
     },
@@ -404,18 +418,17 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       // freed too — station glyphs need the pixels more.
       const mobile = v.w <= 720
       const wSpan = mobile ? Math.max(320, (v.w - v.right) / 0.9) : Math.max(360, (v.w - v.right) / 0.95)
-      const nbLeft = s0.x - P * 1.9 - 30 - trunk.service.length * 5.4
-      // desktop keeps the system headboard in the opening frame — the
-      // imprint is the product's name on first paint, worth the zoom-out
-      const hbLeft = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 262
-      // on a portrait screen a flat run of trunk leaves dead air above and
-      // below — anchor on the first interchange so the opening composes
-      // vertically: trunk, a branch arc and the works all inside the frame
-      const anchor = mobile ? (trunk.stations.find((s) => s.tier === 'interchange') ?? s0) : s0
-      const x0 = mobile ? anchor.x - wSpan / 2 : Math.min(s0.x - P * 2.2, nbLeft - 16, hbLeft - 24)
-      const x1 = mobile ? anchor.x + wSpan / 2 : Math.min(corridorBounds[0]!.geo.x1 + 30, s0.x + wSpan)
+      const nbLeft = s0.x - P * 1.9 - 56 - trunk.service.length * 7.4
+      // the opening frame should contain a whole weave sentence — trunk,
+      // the first unthread/rejoin crossing if one is near, and the frays
+      // it folded out. On phones the anchor is the interchange itself.
+      const ix0 = trunk.stations.find((s) => s.tier === 'interchange')
+      const anchor = mobile ? (ix0 ?? s0) : s0
+      const x0 = mobile ? anchor.x - wSpan / 2 : Math.min(s0.x - P * 2.2, nbLeft - 16)
+      const reach = ix0 && ix0.x - s0.x < wSpan * 1.3 ? ix0.x + U * 3 : s0.x + wSpan
+      const x1 = mobile ? anchor.x + wSpan / 2 : Math.min(corridorBounds[0]!.geo.x1 + 30, Math.max(s0.x + wSpan, reach))
       // vertical extent of everything inside that x-window
-      let y0 = c0.trunkY - U * 1.5 // the headboard hangs above the trunk
+      let y0 = c0.trunkY - U * 0.9
       let y1 = c0.trunkY + U * 0.8
       for (const l of c0.lines) {
         for (const s of l.stations)
@@ -712,15 +725,15 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
                             const a = sg.pts[0]!
                             return (
                               <>
-                                <path className="op-shadow" d={`M${b.x - 9} ${b.y + 1.8} Q${b.x} ${b.y + 6.5} ${b.x + 9} ${b.y + 1.8}`} />
+                                <path className="op-shadow" d={`M${b.x - 11} ${b.y + 2} Q${b.x} ${b.y + 8} ${b.x + 11} ${b.y + 2}`} />
                                 <path
                                   className="op-hump"
-                                  d={`M${b.x - 14} ${b.y} Q${b.x - 9} ${b.y - 13} ${b.x} ${b.y - 13} Q${b.x + 9} ${b.y - 13} ${b.x + 14} ${b.y}`}
+                                  d={`M${b.x - 17} ${b.y} Q${b.x - 11} ${b.y - 16} ${b.x} ${b.y - 16} Q${b.x + 11} ${b.y - 16} ${b.x + 17} ${b.y}`}
                                   stroke={l.color}
                                 />
-                                <circle className="op-dot" cx={b.x - 14} cy={b.y} r={1.7} />
-                                <circle className="op-dot" cx={b.x + 14} cy={b.y} r={1.7} />
-                                <circle className="op-eye" cx={a.x} cy={a.y} r={4.4} stroke={l.color} />
+                                <circle className="op-dot" cx={b.x - 17} cy={b.y} r={2.1} />
+                                <circle className="op-dot" cx={b.x + 17} cy={b.y} r={2.1} />
+                                <circle className="op-eye" cx={a.x} cy={a.y} r={5.4} stroke={l.color} />
                               </>
                             )
                           })()}
@@ -828,14 +841,14 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
           <g ref={trainRef} className="shuttle" style={{ display: 'none' }}>
             <path className="strail" d="M-28 0 L-14 0" stroke="#dfa84d" strokeWidth={2.4} strokeLinecap="round" opacity={0.5} />
             <path className="strail" d="M-44 0 L-34 0" stroke="#dfa84d" strokeWidth={1.6} strokeLinecap="round" opacity={0.25} />
-            <ellipse className="sglow" cx={0} cy={0} rx={22} ry={11} fill="rgba(223,168,77,0.26)" />
+            <ellipse className="sglow" cx={0} cy={0} rx={30} ry={15} fill="rgba(223,168,77,0.26)" />
             <path
               className="sbody"
-              d="M-18 0 C-14 -6 -7 -8 0 -8 C7 -8 14 -6 18 0 C14 6 7 8 0 8 C-7 8 -14 6 -18 0 Z"
+              d="M-25 0 C-19 -8 -10 -11 0 -11 C10 -11 19 -8 25 0 C19 8 10 11 0 11 C-10 11 -19 8 -25 0 Z"
             />
-            <ellipse className="swin" cx={-1} cy={0} rx={6.6} ry={3} />
-            <path className="sslot" d="M-9 -3.4 L-9 3.4 M7 -3.4 L7 3.4" />
-            <circle className="stip" cx={13.5} cy={0} r={1.7} />
+            <ellipse className="swin" cx={-1} cy={0} rx={9} ry={4.2} />
+            <path className="sslot" d="M-12 -4.6 L-12 4.6 M10 -4.6 L10 4.6" />
+            <circle className="stip" cx={18.5} cy={0} r={2.2} />
           </g>
           {/* the shuttle's read — the turn it's on, riding unrotated */}
           <g ref={slabelRef} className="squote" style={{ display: 'none' }}>
@@ -845,9 +858,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
           <g ref={ghostRef} className="shuttle ghost" style={{ display: 'none' }}>
             <path
               className="sbody"
-              d="M-18 0 C-14 -6 -7 -8 0 -8 C7 -8 14 -6 18 0 C14 6 7 8 0 8 C-7 8 -14 6 -18 0 Z"
+              d="M-25 0 C-19 -8 -10 -11 0 -11 C10 -11 19 -8 25 0 C19 8 10 11 0 11 C-10 11 -19 8 -25 0 Z"
             />
-            <ellipse className="swin" cx={-1} cy={0} rx={6.6} ry={3} />
+            <ellipse className="swin" cx={-1} cy={0} rx={9} ry={4.2} />
           </g>
           {/* labels — at reading zoom a knot earns a second line:
               the step title above, its actor and wall-clock below (or
@@ -874,27 +887,6 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               )
             }),
           )}
-          {/* the woven signature patch — stitched into the cloth itself
-              instead of floating chrome */}
-          {(() => {
-            const c0 = net.corridors[0]
-            const trunk = c0?.lines.find((l) => l.trunk)
-            const s0 = trunk?.stations[0]
-            if (!trunk || !s0) return null
-            const bx = s0.x - P * 1.9 - 44 - trunk.service.length * 6.4 - 262
-            const by = c0!.trunkY - U * 1.05
-            return (
-              <g className="headboard" data-ci={0} style={{ ...fade, opacity: dim(0) }} transform={`translate(${bx} ${by})`}>
-                <line className="hb-hang" x1={30} y1={-30} x2={30} y2={0} />
-                <line className="hb-hang" x1={222} y1={-30} x2={222} y2={0} />
-                <rect className="hb-patch" width={252} height={78} rx={8} />
-                <rect className="hb-stitch" x={5} y={5} width={242} height={68} rx={5} />
-                <text className="hb-mark" x={16} y={40}>~</text>
-                <text className="hb-name" x={38} y={40}>trenza</text>
-                <text className="hb-sub" x={18} y={64}>agent sessions, woven · local only</text>
-              </g>
-            )
-          })()}
           {/* selvedge name tags at each weave's left edge */}
           {net.corridors.map((c, i) => {
             const trunk = c.lines.find((l) => l.trunk)
