@@ -34,6 +34,8 @@ interface Props {
   tethers?: Tether[]
   /** station ids dimmed out by the active filter set */
   fout?: Set<string>
+  /** the turn the shuttle is on — rides beside it while replaying */
+  rideLabel?: string | null
   /** fired once per gesture when the user drags the plano (first-run guide) */
   onUserPan?: () => void
   /** fired on every manual gesture (drag, wheel, pinch) — suspends ride follow */
@@ -64,8 +66,8 @@ const smooth = (pts: { x: number; y: number }[]) => {
   return out
 }
 
-const PAPER = '#2c2316'
-const RING = '#0f0b07'
+const PAPER = '#24242e'
+const RING = '#0b0b10'
 
 function stationGlyph(s: Station, color: string, sel: boolean) {
   if (s.tier === 'terminus')
@@ -74,7 +76,7 @@ function stationGlyph(s: Station, color: string, sel: boolean) {
       <g key={s.id}>
         <circle cx={s.x} cy={s.y} r={6.2} fill={PAPER} stroke={color} strokeWidth={2.6} />
         <circle cx={s.x} cy={s.y} r={2.4} fill={color} />
-        {sel && <circle cx={s.x} cy={s.y} r={9.4} fill="none" stroke="#d8a851" strokeWidth={1.2} />}
+        {sel && <circle cx={s.x} cy={s.y} r={9.4} fill="none" stroke="#e6dcc0" strokeWidth={1.2} />}
       </g>
     )
   if (s.tier === 'interchange')
@@ -104,7 +106,7 @@ function stationGlyph(s: Station, color: string, sel: boolean) {
   return <circle key={s.id} cx={s.x} cy={s.y} r={2.5} fill={color} />
 }
 
-const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, tethers, fout, onUserPan, onUserGesture, onArrive }, ref) {
+const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick, onPickWorks, riding, solo, tethers, fout, rideLabel, onUserPan, onUserGesture, onArrive }, ref) {
   const svgRef = useRef<SVGSVGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
   const trainRef = useRef<SVGGElement>(null)
@@ -128,6 +130,8 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     litEl.current = sid ? (svgRef.current?.querySelector(`[data-sid="${CSS.escape(sid)}"]`) as SVGGElement | null) ?? null : null
     litEl.current?.classList.add('lit')
   }
+  const selvRef = useRef<HTMLDivElement>(null)
+  const slabelRef = useRef<SVGGElement>(null)
   const drag = useRef<{ px: number; py: number; cx: number; cy: number; moved: boolean; panning?: boolean } | null>(null)
   const pinch = useRef<{ d: number; k: number } | null>(null)
   const lastKiv = useRef(0)
@@ -175,6 +179,17 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       const { px, py } = toScreen(h.s.x, h.s.y)
       tipRef.current.style.left = `${px + 14}px`
       tipRef.current.style.top = `${py - 34}px`
+    }
+    // selvedge tabs track their session's band as the cloth pans
+    const selv = selvRef.current
+    if (selv && svg) {
+      const vh = svg.clientHeight
+      const kids = selv.children
+      for (let i = 0; i < kids.length && i < selvAnchors.length; i++) {
+        const el = kids[i] as HTMLElement
+        const py = selvAnchors[i]! * k + y
+        el.style.top = `${Math.max(56, Math.min(vh - 150, py))}px`
+      }
     }
   }
 
@@ -275,6 +290,12 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
       g.setAttribute('transform', `translate(${wx} ${wy}) rotate(${angle})`)
       g.style.display = visible ? '' : 'none'
       if (color) g.style.setProperty('--train', color)
+      // the shuttle's read rides beside it, unrotated
+      const q = slabelRef.current
+      if (q) {
+        q.setAttribute('transform', `translate(${wx + 16} ${wy - 18})`)
+        q.style.display = visible ? '' : 'none'
+      }
       // platform lights: the station the train is at or approaching glows
       if (!visible) {
         setLit(null)
@@ -587,6 +608,9 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
     })
   }, [net])
 
+  // selvedge anchors — world-space y of each session's band center
+  const selvAnchors = useMemo(() => corridorBounds.map((b) => (b.geo.y0 + b.geo.y1) / 2), [corridorBounds])
+
   // indexes
   const { stationIndex, worksIndex, lineColors } = useMemo(() => {
     const si = new Map<string, Station>()
@@ -679,6 +703,29 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
                   ) : sg.kind === 'link' ? (
                     <g key={j}>
                       <path className="link" d={smooth(sg.pts)} stroke={l.color} />
+                      {sg.pts.length >= 2 && (
+                        <g className="overpass" pointerEvents="none">
+                          {/* the returning thread lifts a loop over the
+                              strand it rejoins — weave shadowed beneath */}
+                          {(() => {
+                            const b = sg.pts.at(-1)!
+                            const a = sg.pts[0]!
+                            return (
+                              <>
+                                <path className="op-shadow" d={`M${b.x - 9} ${b.y + 1.8} Q${b.x} ${b.y + 6.5} ${b.x + 9} ${b.y + 1.8}`} />
+                                <path
+                                  className="op-hump"
+                                  d={`M${b.x - 14} ${b.y} Q${b.x - 9} ${b.y - 13} ${b.x} ${b.y - 13} Q${b.x + 9} ${b.y - 13} ${b.x + 14} ${b.y}`}
+                                  stroke={l.color}
+                                />
+                                <circle className="op-dot" cx={b.x - 14} cy={b.y} r={1.7} />
+                                <circle className="op-dot" cx={b.x + 14} cy={b.y} r={1.7} />
+                                <circle className="op-eye" cx={a.x} cy={a.y} r={4.4} stroke={l.color} />
+                              </>
+                            )
+                          })()}
+                        </g>
+                      )}
                       {sg.far && (
                         <text className="ftag" x={sg.pts.at(-1)!.x + 8} y={sg.pts.at(-1)!.y + 3} fill={l.color}>
                           ↩ {serviceName(net, l.mergeStation?.lineId)}
@@ -760,14 +807,14 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
               <circle className="halo-dot" cx={selStation.x} cy={selStation.y} r={13} />
               <g transform={`translate(${selStation.x} ${selStation.y - 13})`}>
                 <g className="pin">
-                  <line x1={0} y1={-2} x2={0} y2={-12} stroke="#d8a851" strokeWidth={1.4} />
+                  <line x1={0} y1={-2} x2={0} y2={-12} stroke="#e6dcc0" strokeWidth={1.4} />
                   <path
                     d="M-4.6 -22 a4.6 4.6 0 1 1 9.2 0 c0 3.6 -4.6 7.4 -4.6 7.4 s-4.6 -3.8 -4.6 -7.4"
-                    fill={lineColors.get(selStation.id) ?? '#d8a851'}
-                    stroke="#17120d"
+                    fill={lineColors.get(selStation.id) ?? '#e6dcc0'}
+                    stroke="#141419"
                     strokeWidth={1}
                   />
-                  <circle cy={-22} r={1.7} fill="#17120d" />
+                  <circle cy={-22} r={1.7} fill="#141419" />
                 </g>
               </g>
             </g>
@@ -776,18 +823,31 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
           <g ref={switchRef} className="ptswitch">
             <path className="swtri" d="M0 -5 L9 0 L0 5 Z" />
           </g>
-          {/* the replay token — a loom shuttle carrying the weft */}
+          {/* the replay token — a boat shuttle: pointed ends, a hollow
+              waist, and the bobbin window carries the strand's own ink */}
           <g ref={trainRef} className="shuttle" style={{ display: 'none' }}>
-            <path className="strail" d="M-26 0 L-10 0" stroke="#d8a851" strokeWidth={2.4} strokeLinecap="round" opacity={0.5} />
-            <path className="strail" d="M-40 0 L-30 0" stroke="#d8a851" strokeWidth={1.6} strokeLinecap="round" opacity={0.25} />
-            <ellipse className="sglow" cx={0} cy={0} rx={20} ry={10} fill="rgba(216,168,81,0.28)" />
-            <path className="sbody" d="M-14 0 Q-7 -6.4 0 -6.4 Q7 -6.4 14 0 Q7 6.4 0 6.4 Q-7 6.4 -14 0 Z" />
-            <circle className="stip" cx={8} cy={0} r={1.8} />
-            <circle cx={-3} cy={0} r={1.4} fill="#6b5326" opacity={0.7} />
+            <path className="strail" d="M-28 0 L-14 0" stroke="#dfa84d" strokeWidth={2.4} strokeLinecap="round" opacity={0.5} />
+            <path className="strail" d="M-44 0 L-34 0" stroke="#dfa84d" strokeWidth={1.6} strokeLinecap="round" opacity={0.25} />
+            <ellipse className="sglow" cx={0} cy={0} rx={22} ry={11} fill="rgba(223,168,77,0.26)" />
+            <path
+              className="sbody"
+              d="M-18 0 C-14 -6 -7 -8 0 -8 C7 -8 14 -6 18 0 C14 6 7 8 0 8 C-7 8 -14 6 -18 0 Z"
+            />
+            <ellipse className="swin" cx={-1} cy={0} rx={6.6} ry={3} />
+            <path className="sslot" d="M-9 -3.4 L-9 3.4 M7 -3.4 L7 3.4" />
+            <circle className="stip" cx={13.5} cy={0} r={1.7} />
+          </g>
+          {/* the shuttle's read — the turn it's on, riding unrotated */}
+          <g ref={slabelRef} className="squote" style={{ display: 'none' }}>
+            <text>{(rideLabel ?? '').slice(0, 46)}</text>
           </g>
           {/* ghost shuttle — drifts the weft when nobody is looking */}
           <g ref={ghostRef} className="shuttle ghost" style={{ display: 'none' }}>
-            <path className="sbody" d="M-14 0 Q-7 -6.4 0 -6.4 Q7 -6.4 14 0 Q7 6.4 0 6.4 Q-7 6.4 -14 0 Z" />
+            <path
+              className="sbody"
+              d="M-18 0 C-14 -6 -7 -8 0 -8 C7 -8 14 -6 18 0 C14 6 7 8 0 8 C-7 8 -14 6 -18 0 Z"
+            />
+            <ellipse className="swin" cx={-1} cy={0} rx={6.6} ry={3} />
           </g>
           {/* labels — at reading zoom a knot earns a second line:
               the step title above, its actor and wall-clock below (or
@@ -858,6 +918,30 @@ const MapView = forwardRef<MapHandle, Props>(function MapView({ net, sel, onPick
           })}
         </g>
       </svg>
+      {/* the selvedge — each session's tab stays sewn to the cloth's
+          left edge as the weave pans; click to fly to its strand */}
+      <div ref={selvRef} className="selv" aria-hidden={false}>
+        {net.corridors.map((c, i) => {
+          const trunk = c.lines.find((l) => l.trunk)
+          const b = corridorBounds[i]
+          if (!trunk || !b) return null
+          return (
+            <button
+              key={c.session.id}
+              className="selv-tab"
+              style={{ opacity: solo === null || solo === i ? 1 : 0.25 }}
+              title={`${c.session.title} — fly to strand ${i + 1}`}
+              onClick={() =>
+                fitTo(b.geo.x0 - 60, b.geo.y0 - 60, b.geo.x1 + 60, b.geo.y1 + 60, true)
+              }
+            >
+              <i className="sv-notch" style={{ background: trunk.color }} />
+              <i className="sv-code" style={{ background: trunk.color }}>S{i + 1}</i>
+              <span className="sv-name">{trunk.service}</span>
+            </button>
+          )
+        })}
+      </div>
       {hover && !drag.current?.moved && (
         <div ref={tipRef} className="tip" style={{ left: hover.px + 14, top: hover.py - 34 }}>
           <b>{hover.s.name}</b>

@@ -70,6 +70,7 @@ export default function App() {
   const reduced = useReducedMotion()
   const dockRef = useRef<HTMLElement>(null)
   const mainRef = useRef<HTMLElement>(null)
+  const [pickOpen, setPickOpen] = useState(false)
 
   const ride: Ride | null = useMemo(
     () => (net && net.corridors.length ? buildRide(net, Math.min(svcIdx, net.corridors.length - 1)) : null),
@@ -748,7 +749,7 @@ export default function App() {
       else if (k === 'j') stepTurn(1)
       else if (k === 'k') stepTurn(-1)
       else if (k === 'w') setFallOpen((v) => !v)
-      else if (k === 'Escape') (setSel(null), setFinder(false))
+      else if (k === 'Escape') (setSel(null), setFinder(false), setPickOpen(false))
       else if (k === 'f' || k === '0') map.current?.fit()
       else if (k === '+' || k === '=') map.current?.zoomBy(1.5)
       else if (k === '-') map.current?.zoomBy(1 / 1.5)
@@ -767,6 +768,17 @@ export default function App() {
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
   }, [stepAlong, switchLine, stepTurn, ride, rideUi, rideTo, playing, guide])
+
+  // the pick card folds when you click anywhere off it
+  useEffect(() => {
+    if (!pickOpen) return
+    const onDown = (e: PointerEvent) => {
+      const el = e.target as HTMLElement
+      if (!el.closest('.fbar') && !el.closest('.pickbtn')) setPickOpen(false)
+    }
+    addEventListener('pointerdown', onDown)
+    return () => removeEventListener('pointerdown', onDown)
+  }, [pickOpen])
 
   const stats = weave?.stats
   const demoLoaded = files.some((f) => f.path.startsWith('demo/'))
@@ -849,6 +861,19 @@ export default function App() {
           </div>
         )}
         <div className="tacts">
+          {net && (
+            <button
+              className={`hbtn pickbtn${pickOpen || filterOn ? ' on' : ''}`}
+              aria-expanded={pickOpen}
+              title="pick — filter strands by agent, tool kind, errors"
+              onClick={() => setPickOpen((v) => !v)}
+            >
+              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden>
+                <path d="M2 4h12M4.5 8h7M7 12h2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              pick{filterOn ? ` ${matches.length}` : ''}
+            </button>
+          )}
           {net && curCorridor && (
             <button
               className={`hbtn${fallOpen ? ' on' : ''}`}
@@ -889,8 +914,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* the pick — filter chips; nonmatching knots fade to warp-shadows */}
-      {net && (
+      {/* the pick — a filter card that folds away; nonmatching knots
+          fade to warp-shadows while it's on */}
+      {net && pickOpen && (
         <div className="fbar" role="toolbar" aria-label="filter the weave">
           <span className="flabel">pick</span>
           {agents.map((a) => (
@@ -975,6 +1001,7 @@ export default function App() {
             riding={playing}
             solo={solo ?? (playing && ride ? ride.corridorIdx : null)}
             tethers={tethers}
+            rideLabel={playing ? rideUi?.name : null}
             fout={filterOn ? fout : undefined}
             onUserPan={() => guide === 1 && setGuide(2)}
             onUserGesture={() => setFollowOn(false)}
@@ -1094,6 +1121,17 @@ export default function App() {
         {/* the shuttle dock — pace, transport, the time-loom scrubber */}
         {net && ride && ride.stops.length > 1 && rideUi && (
           <section ref={dockRef} className="dock" aria-label="replay controls">
+            {/* row one of the beam: the wall-clock loomline */}
+            <LoomLine
+              pos={eff}
+              stop={rideUi.stop}
+              total={rideUi.total}
+              ride={ride}
+              times={times}
+              stationOf={stationOf}
+              net={net}
+              onSeek={rideTo}
+            />
             <div className="paces" role="group" aria-label="replay pace">
               {(['tour', 'study', 'real'] as Pace[]).map((p) => (
                 <button
@@ -1149,16 +1187,6 @@ export default function App() {
                 <span className="led-tag">{rideUi.stop >= rideUi.total ? 'selvedge' : 'next'}</span>
                 <MorphText text={rideUi.next} />
               </div>
-              <LoomLine
-                pos={eff}
-                stop={rideUi.stop}
-                total={rideUi.total}
-                ride={ride}
-                times={times}
-                stationOf={stationOf}
-                net={net}
-                onSeek={rideTo}
-              />
               <div className="ridesub">
                 {rideUi.name} · {rideUi.stop}/{rideUi.total}
                 {rideUi.clock ? ` · ${rideUi.clock}` : ''}
@@ -1571,7 +1599,7 @@ function GhostBraid() {
       <path d="M8 45 C40 10 60 80 92 45 S144 10 176 45 208 70 212 45" fill="none" stroke="#9a7ff0" strokeWidth="2.6" strokeLinecap="round" opacity=".85" />
       <path d="M8 45 C40 80 60 10 92 45 S144 80 176 45" fill="none" stroke="#4fb083" strokeWidth="2.6" strokeLinecap="round" opacity=".85" />
       {[8, 92, 176].map((x) => (
-        <circle key={x} cx={x} cy={45} r="4.4" fill="#241c12" stroke="#d8a851" strokeWidth="2" />
+        <circle key={x} cx={x} cy={45} r="4.4" fill="#24242e" stroke="#e6dcc0" strokeWidth="2" />
       ))}
       <path d="M176 45 q10 -8 20 -4 M176 45 q12 0 20 4" fill="none" stroke="#4fb083" strokeWidth="1.4" strokeLinecap="round" opacity=".6" />
     </svg>

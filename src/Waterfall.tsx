@@ -30,9 +30,10 @@ interface Lane {
   bars: { step: Step; x: number; w: number; dur: number; failed: boolean; inferred: boolean }[]
 }
 
-const hhmm = (ts: number) => {
+const hhmm = (ts: number, secs = false) => {
   const d = new Date(ts)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return secs ? `${hm}:${String(d.getSeconds()).padStart(2, '0')}` : hm
 }
 const durStr = (ms: number) => {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s`
@@ -50,7 +51,7 @@ export default function Waterfall({ corridor, sel, playhead, onPick, onClose }: 
     return m
   }, [corridor])
 
-  const { lanes, w, ticks, t0, t1, folded } = useMemo(() => {
+  const { lanes, w, ticks, t0, t1, folded, secTicks, toX } = useMemo(() => {
     // gather every timed step to build the compressed time axis
     const allTs: number[] = []
     for (const t of session.threads) for (const s of t.steps) if (s.ts != null) allTs.push(s.ts)
@@ -67,8 +68,12 @@ export default function Waterfall({ corridor, sel, playhead, onPick, onClose }: 
       }
     }
     bounds.push(t1)
-    // map ts -> x on the compressed axis (scale ~ px per second)
-    const SCALE = 0.12
+    // map ts -> x on the compressed axis. Scale adapts: a short session
+    // fills the drawer instead of scrolling its lanes off-screen; a long
+    // one keeps the full 0.12 px/ms density and scrolls.
+    const compMs = bounds.reduce((acc, _b, i) => (i % 2 ? acc + (bounds[i]! - bounds[i - 1]!) : acc), 0)
+    const avail = Math.max(560, innerWidth - PAD_L - PAD_R - 40)
+    const SCALE = Math.min(0.12, avail / Math.max(1, compMs))
     const marks: { a: number; b: number; x0: number; x1: number }[] = []
     let x = PAD_L
     for (let i = 0; i + 1 < bounds.length; i += 2) {
@@ -116,14 +121,13 @@ export default function Waterfall({ corridor, sel, playhead, onPick, onClose }: 
       lanes.push({ thread: th, color: colorOf(th.id), bars })
     }
 
-    // ticks every ~80px of compressed axis, labelled in real wall time
+    // ticks: largest nice step that still lands at least every ~110px
+    const NICE = [5_000, 10_000, 15_000, 30_000, 60_000, 120_000, 300_000, 600_000, 1_800_000, 3_600_000]
+    const step = NICE.find((s) => s * SCALE >= 110) ?? 3_600_000
     const ticks: { x: number; ts: number; fold: boolean }[] = []
     for (const m of marks) {
-      const span = m.x1 - m.x0
-      const step = Math.max(1, Math.ceil(80 / (SCALE * 60_000))) * 60_000
       const first = Math.ceil(m.a / step) * step
       for (let t = first; t <= m.b; t += step) ticks.push({ x: m.x0 + (t - m.a) * SCALE, ts: t, fold: false })
-      if (span > 0 && m.b - m.a > GAP * 0) continue
     }
     // fold markers
     for (let i = 0; i + 2 < bounds.length; i += 2) {
@@ -131,34 +135,10 @@ export default function Waterfall({ corridor, sel, playhead, onPick, onClose }: 
       ticks.push({ x: foldX, ts: bounds[i + 1]!, fold: true })
     }
     const w = (marks.at(-1)?.x1 ?? PAD_L) + PAD_R
-    return { lanes, w, ticks, t0, t1, folded: bounds.length > 2 }
+    return { lanes, w, ticks, t0, t1, folded: bounds.length > 2, secTicks: step < 60_000, toX: ts2x }
   }, [session, corridor])
 
-  const px = playhead != null ? time2x(playhead) : null
-  function time2x(ts: number): number | null {
-    // rebuild the same mapping cheaply from ticks? — recompute inline
-    const allTs: number[] = []
-    for (const t of session.threads) for (const s of t.steps) if (s.ts != null) allTs.push(s.ts)
-    allTs.sort((a, b) => a - b)
-    if (!allTs.length) return null
-    const SCALE = 0.12
-    const bounds = [allTs[0]!]
-    for (let i = 1; i < allTs.length; i++) {
-      if (allTs[i]! - allTs[i - 1]! > GAP) {
-        bounds.push(allTs[i - 1]! + 1)
-        bounds.push(allTs[i]! - 1)
-      }
-    }
-    bounds.push(allTs.at(-1)!)
-    let x = PAD_L
-    for (let i = 0; i + 1 < bounds.length; i += 2) {
-      const a = bounds[i]!
-      const b = bounds[i + 1]!
-      if (ts <= b) return x + Math.max(0, ts - a) * SCALE
-      x += (b - a) * SCALE + (i + 2 < bounds.length ? FOLD : 0)
-    }
-    return x - FOLD
-  }
+  const px = playhead != null ? toX(playhead) : null
 
   // longest spans across all lanes get the hot outline
   const longest = useMemo(() => {
@@ -185,13 +165,13 @@ export default function Waterfall({ corridor, sel, playhead, onPick, onClose }: 
           {ticks.map((t, i) =>
             t.fold ? (
               <g key={`f${i}`} className="fgapg">
-                <path className="fgap" d={`M${t.x - 4} ${PAD_T - 4} l4 4 -4 4 4 4 -4 4`} strokeWidth={1.4} fill="none" stroke="#7a6a4e" />
+                <path className="fgap" d={`M${t.x - 4} ${PAD_T - 4} l4 4 -4 4 4 4 -4 4`} strokeWidth={1.4} fill="none" stroke="var(--faint)" />
               </g>
             ) : (
               <g key={`t${i}`}>
                 <line className="ftick" x1={t.x} y1={PAD_T - 6} x2={t.x} y2={h - 8} />
                 <text className="ftick-lb" x={t.x + 3} y={PAD_T - 9}>
-                  {hhmm(t.ts)}
+                  {hhmm(t.ts, secTicks)}
                 </text>
               </g>
             ),
@@ -204,6 +184,11 @@ export default function Waterfall({ corridor, sel, playhead, onPick, onClose }: 
                   {lane.thread.label.slice(0, 16)}
                 </text>
                 <line className="ftick" x1={PAD_L - 8} y1={y + 9} x2={w - PAD_R} y2={y + 9} opacity={0.5} />
+                {!lane.bars.length && (
+                  <text className="fempty" x={PAD_L + 4} y={y + 13}>
+                    — no steps timed —
+                  </text>
+                )}
                 {lane.bars.map((b) => {
                   const st = stationByStep.get(b.step.id)
                   return (
@@ -216,7 +201,7 @@ export default function Waterfall({ corridor, sel, playhead, onPick, onClose }: 
                         height={12}
                         rx={2.5}
                         fill={b.failed ? '#e0603f' : lane.color}
-                        opacity={b.inferred ? 0.35 : 0.85}
+                        opacity={b.inferred ? 0.45 : 0.85}
                         onClick={() => st && onPick(st.id)}
                       >
                         <title>
@@ -225,6 +210,11 @@ export default function Waterfall({ corridor, sel, playhead, onPick, onClose }: 
                           {(b.step.calls ?? []).length ? ` · ${toolKind(b.step.calls![0]!.name)}` : ''}
                         </title>
                       </rect>
+                      {b.w >= 26 && (
+                        <text className="fdur" x={b.x + b.w - 3} y={y + 12} textAnchor="end">
+                          {durStr(b.dur)}
+                        </text>
+                      )}
                       {longest.has(b.step.id) && (
                         <rect className="fcp" x={b.x - 1.5} y={y + 1.5} width={b.w + 3} height={15} rx={3.5} />
                       )}
